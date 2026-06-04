@@ -30,9 +30,10 @@ class KeyGenAI:
             "did", "will", "would", "could", "should", "may", "might", "can", "shall"
         }
         self.greetings = {
-            "patterns": ["hi", "hello", "hey", "good morning", "good afternoon", "good evening", 
-                        "howdy", "greetings", "sup", "what's up", "yo", "hola", "bonjour",
-                        "heya", "heyy", "hii", "helloo", "morning", "evening"],
+            "patterns": [r'^hi$', r'^hello$', r'^hey$', r'^good morning$', r'^good afternoon$',
+                         r'^good evening$', r'^howdy$', r'^greetings$', r'^sup$', r"^what's up$",
+                         r'^yo$', r'^hola$', r'^bonjour$', r'^heya$', r'^heyy$', r'^hii$',
+                         r'^helloo$', r'^morning$', r'^evening$'],
             "responses": [
                 "Hello! 👋 How can I help you today?",
                 "Hi there! 😊 What would you like to know?",
@@ -76,13 +77,18 @@ class KeyGenAI:
             return []
         return re.findall(r'\b\w+\b', str(text).lower())
 
+    # ---------- GREETINGS (FIXED) ----------
     def is_greeting(self, text):
         text_lower = text.lower().strip().rstrip('!.,? ')
-        if len(text_lower.split()) <= 2 and any(g in text_lower for g in ["hi", "hey", "hello", "yo"]):
-            return True
+        # Whole‑word matching for short inputs
         for pattern in self.greetings["patterns"]:
-            if text_lower == pattern or text_lower.startswith(pattern):
+            if re.fullmatch(pattern, text_lower):
                 return True
+        # Also catch very short inputs that consist only of a greeting word
+        if len(text_lower.split()) == 1:
+            for greet in ["hi", "hello", "hey", "yo", "sup", "hola", "bonjour", "heya", "heyy", "hii", "helloo"]:
+                if text_lower == greet:
+                    return True
         return False
 
     def get_greeting_response(self):
@@ -127,40 +133,84 @@ class KeyGenAI:
             print(f"Request error: {e}")
             return None
 
-    # ---------- ANSWER EXTRACTION ----------
-    def extract_best_sentence(self, question, text):
-        """Return the single sentence that most likely contains the direct answer."""
+    # ---------- ANSWER TYPE DETECTION ----------
+    def get_answer_type(self, question):
+        """Return a string indicating what kind of answer is expected."""
+        q = question.lower().strip()
+        if q.startswith("who"):
+            return "person"
+        if q.startswith("what") and ("disease" in q or "outbreak" in q or "virus" in q):
+            return "disease"
+        if q.startswith("when"):
+            return "date"
+        if q.startswith("where"):
+            return "place"
+        if q.startswith("which"):
+            # e.g., "which disease", "which country"
+            if "disease" in q or "illness" in q or "outbreak" in q:
+                return "disease"
+            if "country" in q or "city" in q or "place" in q:
+                return "place"
+            if "team" in q or "player" in q or "person" in q:
+                return "person"
+        if q.startswith("how many"):
+            return "number"
+        return "general"
+
+    # ---------- ENTITY EXTRACTION ----------
+    def extract_entity(self, text, answer_type):
+        """Extract a likely entity (person name, disease, date, etc.) from the text."""
         if not text:
             return ""
-        # Split into sentences
-        sentences = re.split(r'(?<=[.!?])\s+', text)
-        if not sentences:
-            return text
-        q_words = set(self.tokenize(question))
-        best_sent = ""
-        best_score = -1
-        # Prioritise sentences that:
-        # - contain the most question keywords
-        # - start with a capital letter and look like a definition/fact
-        for sent in sentences:
-            sent_clean = sent.strip()
-            if len(sent_clean) < 10:
-                continue
-            t_words = set(self.tokenize(sent_clean))
-            overlap = len(q_words.intersection(t_words))
-            # Bonus for "who" questions: sentence contains a proper name (capital word not at start)
-            if question.lower().startswith("who"):
-                if re.search(r'\b[A-Z][a-z]+\b', sent_clean):
-                    overlap += 3
-            # Penalty for sentences that look like navigation or boilerplate
-            if re.search(r'(click here|read more|privacy|subscribe)', sent_clean, re.I):
-                overlap -= 5
-            if overlap > best_score:
-                best_score = overlap
-                best_sent = sent_clean
-        return best_sent if best_score > 0 else sentences[0].strip()
+        # Look for patterns based on answer type
+        if answer_type == "person":
+            # A proper name: consecutive capitalized words
+            matches = re.findall(r'\b(?:[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b', text)
+            if matches:
+                # Return the first one that is not a common word like "World Championship"
+                for m in matches:
+                    if m.lower() not in ("formula one", "world champion", "united states", "world health organization"):
+                        return m
+        elif answer_type == "disease":
+            # Pattern: "disease X", "outbreak of Y", "virus Z"
+            patterns = [
+                r'(?:disease|illness)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
+                r'outbreak of\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
+                r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+virus',
+                r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+disease',
+                r'called\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
+            ]
+            for pat in patterns:
+                m = re.search(pat, text)
+                if m:
+                    return m.group(1)
+        elif answer_type == "date":
+            # Try to extract a year or full date
+            m = re.search(r'(?:\d{1,2}\s+)?(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}', text)
+            if m:
+                return m.group(0)
+            m = re.search(r'\b\d{4}\b', text)
+            if m:
+                return m.group(0)
+        elif answer_type == "place":
+            # Look for location patterns
+            m = re.search(r'(?:in|at|from)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)', text)
+            if m:
+                return m.group(1)
+        return ""
 
-    # ---------- WEB SEARCH (ACCURATE) ----------
+    # ---------- FUTURE EVENT CHECK ----------
+    def is_future_event(self, question):
+        """Check if the question references a future year not yet happened."""
+        # Extract any four‑digit year from the question
+        years = re.findall(r'\b(20\d{2})\b', question)
+        current_year = time.localtime().tm_year
+        for y in years:
+            if int(y) > current_year:
+                return True
+        return False
+
+    # ---------- WEB SEARCH (ULTRA ACCURATE) ----------
     def web_search(self, question):
         cache_key = hashlib.md5(question.lower().encode()).hexdigest()
         if cache_key in self.search_cache:
@@ -170,52 +220,66 @@ class KeyGenAI:
 
         print(f"🔍 Searching: {question}")
 
-        # 1. Try DuckDuckGo Instant Answer for direct facts
-        ddg_url = f"https://api.duckduckgo.com/?q={urllib.parse.quote(question)}&format=json&no_html=1&skip_disambig=1"
-        data = self.make_http_request(ddg_url, json_response=True)
-        if data:
-            # Best direct answer: Abstract or Answer field
-            abstract = data.get('AbstractText', '')
-            answer = data.get('Answer', '')
-            if answer and len(answer) > 10:
-                result = self.clean_text(answer)
-                self.search_cache[cache_key] = {'data': result, 'timestamp': time.time()}
-                self.save_search_cache()
-                return result
-            if abstract and len(abstract) > 40:
-                result = self.clean_text(abstract)
-                # Extract the most relevant sentence
-                result = self.extract_best_sentence(question, result)
-                self.search_cache[cache_key] = {'data': result, 'timestamp': time.time()}
-                self.save_search_cache()
-                return result
+        # If question is about a future event, answer accordingly
+        if self.is_future_event(question):
+            result = "This event is in the future – reliable data is not yet available."
+            self.search_cache[cache_key] = {'data': result, 'timestamp': time.time()}
+            self.save_search_cache()
+            return result
 
-        # 2. Google featured snippet / knowledge panel
+        answer_type = self.get_answer_type(question)
+
+        # 1. DuckDuckGo Instant Answer (best for concise facts)
+        try:
+            ddg_url = f"https://api.duckduckgo.com/?q={urllib.parse.quote(question)}&format=json&no_html=1&skip_disambig=1"
+            data = self.make_http_request(ddg_url, json_response=True)
+            if data:
+                abstract = data.get('AbstractText', '')
+                answer = data.get('Answer', '')
+                # If we have a direct answer, use it
+                if answer and len(answer) > 5:
+                    result = self.clean_text(answer)
+                    self.search_cache[cache_key] = {'data': result, 'timestamp': time.time()}
+                    self.save_search_cache()
+                    return result
+                # Otherwise try to extract entity from abstract
+                if abstract and len(abstract) > 40:
+                    entity = self.extract_entity(abstract, answer_type)
+                    if entity:
+                        result = entity
+                    else:
+                        # Fall back to first sentence
+                        result = self.clean_text(re.split(r'(?<=[.!?])\s+', abstract)[0])
+                    self.search_cache[cache_key] = {'data': result, 'timestamp': time.time()}
+                    self.save_search_cache()
+                    return result
+        except Exception as e:
+            print(f"DuckDuckGo API error: {e}")
+
+        # 2. Google snippet
         google_html = self.make_http_request(
             f"https://www.google.com/search?q={urllib.parse.quote(question)}&hl=en"
         )
         if google_html:
             snippet = self.extract_google_snippet(google_html)
             if snippet:
-                # For who/what questions, try to get the concise answer from knowledge panel
-                if question.lower().startswith(("who", "what")):
-                    kp = self.extract_google_knowledge_panel(google_html)
-                    if kp:
-                        result = self.clean_text(kp)
-                        self.search_cache[cache_key] = {'data': result, 'timestamp': time.time()}
-                        self.save_search_cache()
-                        return result
-                result = self.clean_text(snippet)
-                result = self.extract_best_sentence(question, result)
+                entity = self.extract_entity(snippet, answer_type)
+                if entity:
+                    result = entity
+                else:
+                    result = self.clean_text(snippet)
                 self.search_cache[cache_key] = {'data': result, 'timestamp': time.time()}
                 self.save_search_cache()
                 return result
 
-        # 3. Wikipedia
+        # 3. Wikipedia extract
         wiki = self.search_wikipedia(question)
         if wiki:
-            result = self.clean_text(wiki)
-            result = self.extract_best_sentence(question, result)
+            entity = self.extract_entity(wiki, answer_type)
+            if entity:
+                result = entity
+            else:
+                result = self.clean_text(re.split(r'(?<=[.!?])\s+', wiki)[0])
             self.search_cache[cache_key] = {'data': result, 'timestamp': time.time()}
             self.save_search_cache()
             return result
@@ -236,23 +300,6 @@ class KeyGenAI:
                     return text
         return None
 
-    def extract_google_knowledge_panel(self, html):
-        """Extract a concise definition/description from the knowledge panel."""
-        # Various possible containers
-        patterns = [
-            r'<div class="kno-rdesc"[^>]*>.*?<span[^>]*>(.*?)</span>',
-            r'<div class="LGOjhe"[^>]*>.*?<span[^>]*>(.*?)</span>',
-            r'<div class="kno-ecr-pt"[^>]*>(.*?)</div>',
-            r'<span class="hgKElc"[^>]*>(.*?)</span>',   # definition box
-        ]
-        for pattern in patterns:
-            match = re.search(pattern, html, re.DOTALL)
-            if match:
-                text = re.sub(r'<.*?>', '', match.group(1)).strip()
-                if 20 < len(text) < 800:
-                    return text
-        return None
-
     def search_wikipedia(self, query):
         try:
             api_url = f"https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch={urllib.parse.quote(query)}&format=json&srlimit=1"
@@ -269,7 +316,7 @@ class KeyGenAI:
             pass
         return None
 
-    # ---------- LOCAL KNOWLEDGE (only for general queries) ----------
+    # ---------- LOCAL KNOWLEDGE ----------
     def calculate_relevance_score(self, question, text):
         if not question or not text:
             return 0
@@ -300,13 +347,11 @@ class KeyGenAI:
 
     # ---------- RESPONSE PIPELINE ----------
     def get_answer_with_fallback(self, question):
-        """Always search web for factual questions, fallback to local only for casual chat."""
-        # For fact-seeking questions, skip local knowledge entirely
+        # For fact‑seeking questions, skip local and go straight to web
         fact_starters = ("who", "what", "when", "where", "why", "how", "which", "is", "are", "do", "does")
         if question.lower().startswith(fact_starters) or "?" in question:
             return self.web_search(question)
-
-        # Non‑question: try local first then web
+        # Non‑question: try local then web
         local, conf = self.search_local_knowledge(question)
         if local and conf > 0.3 and len(local) > 80:
             return local
@@ -358,9 +403,11 @@ class KeyGenAI:
         raw = user_input.strip()
         low = raw.lower()
 
+        # Greetings first (now accurate)
         if self.is_greeting(raw):
             return self.get_greeting_response()
 
+        # Learn about command
         if low.startswith("learn about "):
             topic = raw[12:].strip()
             result = self.web_search(topic)
@@ -370,9 +417,6 @@ class KeyGenAI:
 
         answer = self.get_answer_with_fallback(raw)
         if answer:
-            # Keep answer concise
-            if len(answer) > 600:
-                answer = self.extract_best_sentence(raw, answer)
             return self.grammar_checker(answer)
         return "I couldn't find a reliable answer. Try rephrasing."
 
