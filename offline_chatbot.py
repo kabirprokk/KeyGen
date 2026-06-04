@@ -29,11 +29,14 @@ class KeyGenAI:
             "it", "its", "be", "been", "being", "have", "has", "had", "do", "does",
             "did", "will", "would", "could", "should", "may", "might", "can", "shall"
         }
+        # Greetings: only exact whole‑word matches
         self.greetings = {
-            "patterns": [r'^hi$', r'^hello$', r'^hey$', r'^good morning$', r'^good afternoon$',
-                         r'^good evening$', r'^howdy$', r'^greetings$', r'^sup$', r"^what's up$",
-                         r'^yo$', r'^hola$', r'^bonjour$', r'^heya$', r'^heyy$', r'^hii$',
-                         r'^helloo$', r'^morning$', r'^evening$'],
+            "patterns": [
+                r'^hi$', r'^hello$', r'^hey$', r'^good morning$', r'^good afternoon$',
+                r'^good evening$', r'^howdy$', r'^greetings$', r'^sup$', r"^what's up$",
+                r'^yo$', r'^hola$', r'^bonjour$', r'^heya$', r'^heyy$', r'^hii$',
+                r'^helloo$', r'^morning$', r'^evening$'
+            ],
             "responses": [
                 "Hello! 👋 How can I help you today?",
                 "Hi there! 😊 What would you like to know?",
@@ -52,7 +55,7 @@ class KeyGenAI:
         self.load_all_data()
         self.load_search_cache()
 
-    # ---------- CACHE ----------
+    # ---------- Cache ----------
     def load_search_cache(self):
         try:
             if os.path.exists(self.search_cache_file):
@@ -63,32 +66,31 @@ class KeyGenAI:
 
     def save_search_cache(self):
         try:
-            if len(self.search_cache) > 200:
-                keys = list(self.search_cache.keys())[-200:]
+            if len(self.search_cache) > 500:
+                keys = list(self.search_cache.keys())[-500:]
                 self.search_cache = {k: self.search_cache[k] for k in keys}
             with open(self.search_cache_file, 'w', encoding='utf-8') as f:
                 json.dump(self.search_cache, f, indent=2)
         except:
             pass
 
-    # ---------- TOKENIZATION ----------
+    # ---------- Tokenization ----------
     def tokenize(self, text):
         if not text:
             return []
         return re.findall(r'\b\w+\b', str(text).lower())
 
-    # ---------- GREETINGS (FIXED) ----------
+    # ---------- Greeting Detection (BUG‑FREE) ----------
     def is_greeting(self, text):
         text_lower = text.lower().strip().rstrip('!.,? ')
-        # Whole‑word matching for short inputs
+        # Exact match against patterns
         for pattern in self.greetings["patterns"]:
             if re.fullmatch(pattern, text_lower):
                 return True
-        # Also catch very short inputs that consist only of a greeting word
+        # Also catch single common greetings that might have trailing punctuation already handled
         if len(text_lower.split()) == 1:
-            for greet in ["hi", "hello", "hey", "yo", "sup", "hola", "bonjour", "heya", "heyy", "hii", "helloo"]:
-                if text_lower == greet:
-                    return True
+            if text_lower in {"hi", "hello", "hey", "yo", "sup", "hola", "bonjour", "heya", "heyy", "hii", "helloo"}:
+                return True
         return False
 
     def get_greeting_response(self):
@@ -108,7 +110,6 @@ class KeyGenAI:
         text = re.sub(r'\bi\b(?![\'\.])', 'I', text)
         return text
 
-    # ---------- UTILS ----------
     def clean_text(self, text):
         clean = re.sub(r'<.*?>', '', text)
         noise = ['click here', 'read more', 'cookie', 'privacy policy', 'subscribe', 'advertisement', '©']
@@ -118,11 +119,13 @@ class KeyGenAI:
         clean = re.sub(r'([.!?])\1+', r'\1', clean)
         return clean
 
-    def make_http_request(self, url, timeout=8, json_response=False):
+    def make_http_request(self, url, timeout=8, json_response=False, headers_extra=None):
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         }
+        if headers_extra:
+            headers.update(headers_extra)
         try:
             req = urllib.request.Request(url, headers=headers)
             with urllib.request.urlopen(req, timeout=timeout, context=self.ssl_context) as resp:
@@ -133,76 +136,78 @@ class KeyGenAI:
             print(f"Request error: {e}")
             return None
 
-    # ---------- ANSWER TYPE DETECTION ----------
+    # ---------- Answer Type & Entity Extraction ----------
     def get_answer_type(self, question):
-        """Return a string indicating what kind of answer is expected."""
         q = question.lower().strip()
         if q.startswith("who"):
             return "person"
-        if q.startswith("what") and ("disease" in q or "outbreak" in q or "virus" in q):
-            return "disease"
+        if q.startswith("what"):
+            if any(w in q for w in ["disease", "outbreak", "virus", "illness"]):
+                return "disease"
+            if "name" in q or "called" in q:
+                return "general"  # we'll try to extract entity
+            return "general"
         if q.startswith("when"):
             return "date"
         if q.startswith("where"):
             return "place"
         if q.startswith("which"):
-            # e.g., "which disease", "which country"
             if "disease" in q or "illness" in q or "outbreak" in q:
                 return "disease"
             if "country" in q or "city" in q or "place" in q:
                 return "place"
-            if "team" in q or "player" in q or "person" in q:
+            if "person" in q or "player" in q or "team" in q:
                 return "person"
+            return "general"
         if q.startswith("how many"):
             return "number"
         return "general"
 
-    # ---------- ENTITY EXTRACTION ----------
     def extract_entity(self, text, answer_type):
-        """Extract a likely entity (person name, disease, date, etc.) from the text."""
+        """Extract a short answer entity from a longer text."""
         if not text:
             return ""
-        # Look for patterns based on answer type
         if answer_type == "person":
-            # A proper name: consecutive capitalized words
-            matches = re.findall(r'\b(?:[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b', text)
-            if matches:
-                # Return the first one that is not a common word like "World Championship"
-                for m in matches:
-                    if m.lower() not in ("formula one", "world champion", "united states", "world health organization"):
-                        return m
+            # Look for consecutive capitalized words (proper noun)
+            names = re.findall(r'\b(?:[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b', text)
+            if names:
+                # Filter out very common false positives
+                for n in names:
+                    if n.lower() not in {"formula one", "world champion", "united states", "world health organization", "united nations"}:
+                        return n
+            # Fallback: last name mentioned
+            m = re.search(r'\b([A-Z][a-z]+)\b', text)
+            if m:
+                return m.group(1)
         elif answer_type == "disease":
-            # Pattern: "disease X", "outbreak of Y", "virus Z"
             patterns = [
                 r'(?:disease|illness)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
                 r'outbreak of\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
                 r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+virus',
                 r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+disease',
                 r'called\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
+                r'known as\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
             ]
             for pat in patterns:
                 m = re.search(pat, text)
                 if m:
                     return m.group(1)
         elif answer_type == "date":
-            # Try to extract a year or full date
+            # Full date: Month day, year
             m = re.search(r'(?:\d{1,2}\s+)?(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}', text)
             if m:
                 return m.group(0)
-            m = re.search(r'\b\d{4}\b', text)
+            # Just year
+            m = re.search(r'\b(20\d{2})\b', text)
             if m:
                 return m.group(0)
         elif answer_type == "place":
-            # Look for location patterns
             m = re.search(r'(?:in|at|from)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)', text)
             if m:
                 return m.group(1)
         return ""
 
-    # ---------- FUTURE EVENT CHECK ----------
     def is_future_event(self, question):
-        """Check if the question references a future year not yet happened."""
-        # Extract any four‑digit year from the question
         years = re.findall(r'\b(20\d{2})\b', question)
         current_year = time.localtime().tm_year
         for y in years:
@@ -210,7 +215,7 @@ class KeyGenAI:
                 return True
         return False
 
-    # ---------- WEB SEARCH (ULTRA ACCURATE) ----------
+    # ---------- Multi‑Source Search (Reddit, StackExchange, DuckDuckGo, Wikipedia, Google) ----------
     def web_search(self, question):
         cache_key = hashlib.md5(question.lower().encode()).hexdigest()
         if cache_key in self.search_cache:
@@ -219,8 +224,6 @@ class KeyGenAI:
                 return entry['data']
 
         print(f"🔍 Searching: {question}")
-
-        # If question is about a future event, answer accordingly
         if self.is_future_event(question):
             result = "This event is in the future – reliable data is not yet available."
             self.search_cache[cache_key] = {'data': result, 'timestamp': time.time()}
@@ -228,63 +231,131 @@ class KeyGenAI:
             return result
 
         answer_type = self.get_answer_type(question)
+        candidates = []
 
-        # 1. DuckDuckGo Instant Answer (best for concise facts)
+        # 1. DuckDuckGo Instant Answer
         try:
             ddg_url = f"https://api.duckduckgo.com/?q={urllib.parse.quote(question)}&format=json&no_html=1&skip_disambig=1"
             data = self.make_http_request(ddg_url, json_response=True)
             if data:
                 abstract = data.get('AbstractText', '')
                 answer = data.get('Answer', '')
-                # If we have a direct answer, use it
                 if answer and len(answer) > 5:
-                    result = self.clean_text(answer)
-                    self.search_cache[cache_key] = {'data': result, 'timestamp': time.time()}
-                    self.save_search_cache()
-                    return result
-                # Otherwise try to extract entity from abstract
-                if abstract and len(abstract) > 40:
-                    entity = self.extract_entity(abstract, answer_type)
-                    if entity:
-                        result = entity
-                    else:
-                        # Fall back to first sentence
-                        result = self.clean_text(re.split(r'(?<=[.!?])\s+', abstract)[0])
-                    self.search_cache[cache_key] = {'data': result, 'timestamp': time.time()}
-                    self.save_search_cache()
-                    return result
+                    candidates.append(("ddg_direct", self.clean_text(answer)))
+                elif abstract and len(abstract) > 40:
+                    candidates.append(("ddg_abstract", self.clean_text(abstract)))
         except Exception as e:
-            print(f"DuckDuckGo API error: {e}")
+            print(f"DuckDuckGo error: {e}")
 
-        # 2. Google snippet
+        # 2. Wikipedia (intro extract)
+        wiki = self.search_wikipedia(question)
+        if wiki:
+            candidates.append(("wikipedia", self.clean_text(wiki)))
+
+        # 3. Google snippet + knowledge panel
         google_html = self.make_http_request(
             f"https://www.google.com/search?q={urllib.parse.quote(question)}&hl=en"
         )
         if google_html:
             snippet = self.extract_google_snippet(google_html)
             if snippet:
-                entity = self.extract_entity(snippet, answer_type)
-                if entity:
+                candidates.append(("google_snippet", self.clean_text(snippet)))
+            kp = self.extract_google_knowledge_panel(google_html)
+            if kp:
+                candidates.append(("google_kp", self.clean_text(kp)))
+
+        # 4. Reddit (public JSON API)
+        try:
+            reddit_url = f"https://www.reddit.com/search.json?q={urllib.parse.quote(question)}&limit=3&sort=relevance"
+            reddit_data = self.make_http_request(reddit_url, json_response=True, headers_extra={'User-Agent': 'KeyGenAI/1.0'})
+            if reddit_data and 'data' in reddit_data:
+                for post in reddit_data['data']['children'][:3]:
+                    pdata = post['data']
+                    # Combine title and selftext
+                    content = pdata.get('title', '') + ' ' + pdata.get('selftext', '')
+                    if len(content) > 40:
+                        candidates.append(("reddit", self.clean_text(content)))
+                        # Also try to get the top comment
+                        permalink = pdata.get('permalink', '')
+                        if permalink:
+                            comments_url = f"https://www.reddit.com{permalink}.json?limit=1"
+                            comments_data = self.make_http_request(comments_url, json_response=True, headers_extra={'User-Agent': 'KeyGenAI/1.0'})
+                            if comments_data:
+                                # structure: [post, comments]
+                                if len(comments_data) > 1:
+                                    for comment in comments_data[1]['data']['children'][:2]:
+                                        if 'body' in comment['data']:
+                                            cbody = comment['data']['body']
+                                            if len(cbody) > 40:
+                                                candidates.append(("reddit_comment", self.clean_text(cbody)))
+        except Exception as e:
+            print(f"Reddit error: {e}")
+
+        # 5. Stack Exchange (API v2.3)
+        try:
+            # Use a key from StackApps (free registration) - this is a public key for demonstration, replace if needed
+            se_key = "U4DMV*8nvpm3EOpvf69Rxw(("
+            se_url = f"https://api.stackexchange.com/2.3/search/advanced?order=desc&sort=relevance&q={urllib.parse.quote(question)}&site=stackoverflow&pagesize=2&key={se_key}"
+            se_data = self.make_http_request(se_url, json_response=True, headers_extra={'User-Agent': 'KeyGenAI/1.0'})
+            if se_data and 'items' in se_data:
+                for item in se_data['items'][:2]:
+                    # Get the accepted answer if available
+                    if 'accepted_answer_id' in item:
+                        ans_id = item['accepted_answer_id']
+                        ans_url = f"https://api.stackexchange.com/2.3/answers/{ans_id}?order=desc&sort=votes&site=stackoverflow&filter=withbody&key={se_key}"
+                        ans_data = self.make_http_request(ans_url, json_response=True, headers_extra={'User-Agent': 'KeyGenAI/1.0'})
+                        if ans_data and 'items' in ans_data:
+                            body = ans_data['items'][0].get('body', '')
+                            if body:
+                                candidates.append(("stackexchange_accepted", self.clean_text(body)))
+                    # Otherwise use the question body
+                    if 'body' in item:
+                        candidates.append(("stackexchange_question", self.clean_text(item['body'])))
+        except Exception as e:
+            print(f"StackExchange error: {e}")
+
+        # --- Combine and extract answer ---
+        if not candidates:
+            print("❌ No results")
+            return None
+
+        # For entity‑type questions, try to extract exact answer
+        if answer_type in ("person", "disease", "date", "place", "number"):
+            for source, text in candidates:
+                entity = self.extract_entity(text, answer_type)
+                if entity and len(entity) > 2:
                     result = entity
-                else:
-                    result = self.clean_text(snippet)
-                self.search_cache[cache_key] = {'data': result, 'timestamp': time.time()}
-                self.save_search_cache()
-                return result
+                    self.search_cache[cache_key] = {'data': result, 'timestamp': time.time()}
+                    self.save_search_cache()
+                    return result
 
-        # 3. Wikipedia extract
-        wiki = self.search_wikipedia(question)
-        if wiki:
-            entity = self.extract_entity(wiki, answer_type)
-            if entity:
-                result = entity
-            else:
-                result = self.clean_text(re.split(r'(?<=[.!?])\s+', wiki)[0])
-            self.search_cache[cache_key] = {'data': result, 'timestamp': time.time()}
-            self.save_search_cache()
-            return result
+        # General fallback: pick the best explanatory sentence
+        best_text = ""
+        best_score = -1
+        q_words = set(self.tokenize(question))
+        for source, text in candidates:
+            # Score by keyword overlap and length
+            score = len(q_words.intersection(set(self.tokenize(text)))) * 2
+            score += min(len(text) / 100, 5)  # prefer medium length
+            # Bonus for authoritative sources
+            if source in ["wikipedia", "stackexchange_accepted"]:
+                score += 5
+            if score > best_score:
+                best_score = score
+                best_text = text
 
-        return None
+        if not best_text or len(best_text) < 20:
+            return None
+
+        # Trim to a concise answer
+        sentences = re.split(r'(?<=[.!?])\s+', best_text)
+        final = sentences[0] if sentences else best_text
+        final = self.clean_text(final)
+        if len(final) > 600:
+            final = final[:600].rsplit(' ', 1)[0] + "..."
+        self.search_cache[cache_key] = {'data': final, 'timestamp': time.time()}
+        self.save_search_cache()
+        return final
 
     def extract_google_snippet(self, html):
         patterns = [
@@ -297,6 +368,20 @@ class KeyGenAI:
                 text = re.sub(r'<.*?>', '', match.group(1))
                 text = re.sub(r'\s+', ' ', text).strip()
                 if 60 < len(text) < 2000:
+                    return text
+        return None
+
+    def extract_google_knowledge_panel(self, html):
+        patterns = [
+            r'<div class="kno-rdesc"[^>]*>.*?<span[^>]*>(.*?)</span>',
+            r'<div class="LGOjhe"[^>]*>.*?<span[^>]*>(.*?)</span>',
+            r'<div class="kno-ecr-pt"[^>]*>(.*?)</div>',
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, html, re.DOTALL)
+            if match:
+                text = re.sub(r'<.*?>', '', match.group(1)).strip()
+                if 20 < len(text) < 800:
                     return text
         return None
 
@@ -316,7 +401,7 @@ class KeyGenAI:
             pass
         return None
 
-    # ---------- LOCAL KNOWLEDGE ----------
+    # ---------- Local knowledge (used only for casual statements) ----------
     def calculate_relevance_score(self, question, text):
         if not question or not text:
             return 0
@@ -345,13 +430,13 @@ class KeyGenAI:
                 best_match = sentence
         return best_match, highest_score
 
-    # ---------- RESPONSE PIPELINE ----------
+    # ---------- Main response logic ----------
     def get_answer_with_fallback(self, question):
-        # For fact‑seeking questions, skip local and go straight to web
+        # Fact‑seeking questions always go to web
         fact_starters = ("who", "what", "when", "where", "why", "how", "which", "is", "are", "do", "does")
         if question.lower().startswith(fact_starters) or "?" in question:
             return self.web_search(question)
-        # Non‑question: try local then web
+        # Casual statement: try local then web
         local, conf = self.search_local_knowledge(question)
         if local and conf > 0.3 and len(local) > 80:
             return local
@@ -403,7 +488,7 @@ class KeyGenAI:
         raw = user_input.strip()
         low = raw.lower()
 
-        # Greetings first (now accurate)
+        # Greeting – now bulletproof
         if self.is_greeting(raw):
             return self.get_greeting_response()
 
@@ -421,7 +506,7 @@ class KeyGenAI:
         return "I couldn't find a reliable answer. Try rephrasing."
 
 
-# ---------- WEB SERVER (same clean UI) ----------
+# ---------- Web Server (unchanged, clean UI) ----------
 class ChatHandler(BaseHTTPRequestHandler):
     bot = None
 
