@@ -4,6 +4,7 @@ import json
 import os
 import hashlib
 import time
+import math
 from collections import defaultdict, Counter
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
@@ -18,16 +19,17 @@ class KeyGenAI:
         self.learned_file = os.path.join(self.knowledge_dir, "learned_knowledge.json")
         
         # Core knowledge storage
-        self.knowledge_base = []          # JSON modules
-        self.gk_base = []                 # General knowledge facts
-        self.learned_facts = {}           # Dynamically learned facts
-        self.sentence_bank = []           # All sentences from all sources
-        self.entity_index = defaultdict(list)  # Entity -> sentences mapping
-        self.ngram_index = defaultdict(list)   # N-gram -> sentences mapping
-        self.word_freq = Counter()        # Word frequency for importance scoring
-        self.entity_map = {}              # Entity variations -> canonical form
+        self.knowledge_base = []
+        self.gk_base = []
+        self.learned_facts = {}
+        self.raw_data_chunks = []
+        self.sentence_bank = []
+        self.entity_index = defaultdict(list)
+        self.ngram_index = defaultdict(list)
+        self.word_freq = Counter()
+        self.entity_map = {}
         
-        # Enhanced tokenization
+        # Enhanced tokenization stopwords
         self.stopwords = {
             "a", "an", "the", "and", "or", "but", "is", "are", "was", "were",
             "to", "at", "by", "for", "of", "with", "in", "on", "that", "this",
@@ -64,20 +66,19 @@ class KeyGenAI:
         """Advanced tokenization with entity recognition."""
         if not text:
             return []
-        # Extract words, numbers, and special tokens
         tokens = re.findall(r'\b\w+\b', str(text).lower())
         return tokens
     
     def extract_entities(self, text):
-        """Extract named entities (proper nouns, numbers, dates) from text."""
+        """Extract named entities from text."""
         entities = []
-        # Capitalized multi-word phrases (proper nouns)
+        # Capitalized multi-word phrases
         proper_nouns = re.findall(r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b', text)
         entities.extend(proper_nouns)
-        # Single capitalized words (not at start of sentence)
+        # Single capitalized words
         single_proper = re.findall(r'(?<=\s)([A-Z][a-z]+)\b', text)
         entities.extend([w for w in single_proper if w.lower() not in self.stopwords])
-        # Numbers and dates
+        # Numbers
         numbers = re.findall(r'\b\d+(?:\.\d+)?\b', text)
         entities.extend(numbers)
         # Years
@@ -86,7 +87,7 @@ class KeyGenAI:
         return list(set(entities))
     
     def generate_ngrams(self, tokens, n_range=(1, 4)):
-        """Generate n-grams from tokens for flexible matching."""
+        """Generate n-grams from tokens."""
         ngrams = []
         for n in range(n_range[0], n_range[1] + 1):
             for i in range(len(tokens) - n + 1):
@@ -95,30 +96,26 @@ class KeyGenAI:
         return ngrams
     
     def extract_keywords(self, text, top_n=10):
-        """Extract the most important keywords using TF-IDF-like scoring."""
+        """Extract important keywords using TF-IDF scoring."""
         tokens = self.tokenize(text)
-        # Remove stopwords
         content_words = [t for t in tokens if t not in self.stopwords and len(t) > 1]
-        # Score by frequency and length
         word_scores = {}
         total_docs = max(len(self.sentence_bank), 1)
+        
         for word in set(content_words):
             tf = content_words.count(word) / max(len(content_words), 1)
             doc_count = sum(1 for s in self.sentence_bank if word in s.lower())
-            idf = __import__('math').log(total_docs / max(doc_count, 1))
+            idf = math.log(total_docs / max(doc_count, 1))
             word_scores[word] = tf * idf
-        # Sort and return top keywords
+        
         sorted_words = sorted(word_scores.items(), key=lambda x: x[1], reverse=True)
         return [word for word, score in sorted_words[:top_n]]
     
     def extract_question_focus(self, question):
         """Extract the core focus of a question."""
         q = question.lower().strip()
-        # Remove question words
         focus = re.sub(r'^(who|what|when|where|why|how|which|is|are|do|does|did|can|could|will|would|shall|should)\s+', '', q)
-        # Remove question mark
         focus = focus.rstrip('?')
-        # Extract key entities and keywords
         entities = self.extract_entities(question)
         keywords = self.extract_keywords(focus, top_n=5)
         return focus, entities, keywords
@@ -129,7 +126,6 @@ class KeyGenAI:
         """Build powerful search indexes from all knowledge sources."""
         print("Building knowledge indexes...")
         
-        # Collect all sentences
         all_sentences = []
         
         # From JSON knowledge base
@@ -179,7 +175,6 @@ class KeyGenAI:
             tokens = self.tokenize(sentence)
             self.word_freq.update(tokens)
         
-        # Build entity map (variations -> canonical)
         self._build_entity_map()
         
         print(f"✓ Indexed {len(self.sentence_bank)} sentences")
@@ -188,13 +183,10 @@ class KeyGenAI:
     
     def _build_entity_map(self):
         """Map entity variations to canonical forms."""
-        # Group similar entities
         for entity in self.entity_index:
-            # Normalize: lowercase, remove punctuation
             normalized = re.sub(r'[^\w\s]', '', entity.lower()).strip()
             if normalized not in self.entity_map:
                 self.entity_map[normalized] = entity
-            # Also map partial matches
             words = normalized.split()
             if len(words) > 1:
                 for i in range(len(words)):
@@ -211,15 +203,15 @@ class KeyGenAI:
         tokens2 = set(self.tokenize(text2))
         if not tokens1 or not tokens2:
             return 0
+        
         intersection = len(tokens1.intersection(tokens2))
         union = len(tokens1.union(tokens2))
-        # Jaccard similarity
         jaccard = intersection / union if union > 0 else 0
-        # Bonus for shared entities
+        
         entities1 = set(e.lower() for e in self.extract_entities(text1))
         entities2 = set(e.lower() for e in self.extract_entities(text2))
         entity_overlap = len(entities1.intersection(entities2)) / max(len(entities1.union(entities2)), 1)
-        # Combined score
+        
         return jaccard * 0.6 + entity_overlap * 0.4
     
     def search_knowledge(self, question, top_k=5):
@@ -242,7 +234,7 @@ class KeyGenAI:
             if ngram in self.ngram_index:
                 for sentence in self.ngram_index[ngram]:
                     score = self.calculate_similarity(question, sentence)
-                    score += 0.1  # Bonus for n-gram match
+                    score += 0.1
                     results.append((score, sentence, "ngram_match"))
         
         # Strategy 3: Keyword matching
@@ -300,7 +292,6 @@ class KeyGenAI:
         combined = " ".join([s[1] for s in sentences[:3]])
         
         if q_type == "person":
-            # Look for person names near winning/achievement words
             patterns = [
                 r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})\s+(?:won|claimed|secured|became|crowned|named|selected|elected|is|was)',
                 r'(?:won by|awarded to|champion[:\s]+|winner[:\s]+)\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})',
@@ -352,7 +343,6 @@ class KeyGenAI:
     
     def generate_answer(self, question):
         """Generate a comprehensive answer from knowledge base."""
-        # Search for relevant knowledge
         results = self.search_knowledge(question, top_k=5)
         
         if not results:
@@ -363,7 +353,7 @@ class KeyGenAI:
         if exact and len(exact) < 200:
             return exact
         
-        # Combine relevant sentences into a coherent answer
+        # Combine relevant sentences
         answer_parts = []
         seen = set()
         for score, sentence, source in results[:3]:
@@ -383,13 +373,11 @@ class KeyGenAI:
         """Learn a new fact and index it."""
         self.learned_facts[question] = answer
         
-        # Add to sentence bank
         if question not in self.sentence_bank:
             self.sentence_bank.append(question)
         if answer not in self.sentence_bank:
             self.sentence_bank.append(answer)
         
-        # Index the new fact
         for sentence in [question, answer]:
             entities = self.extract_entities(sentence)
             for entity in entities:
@@ -400,9 +388,7 @@ class KeyGenAI:
                 self.ngram_index[ngram].append(sentence)
             self.word_freq.update(tokens)
         
-        # Save learned facts
         self.save_learned_facts()
-        
         return True
     
     def learn_from_statement(self, text):
@@ -410,13 +396,10 @@ class KeyGenAI:
         if not text or len(text.split()) < 5:
             return False
         
-        # Check if it's a factual statement
         factual_patterns = [" is ", " was ", " are ", " were ", " has ", " have ", " will ", " can ", " does "]
         if any(pattern in text.lower() for pattern in factual_patterns):
-            # Add to sentence bank
             if text not in self.sentence_bank:
                 self.sentence_bank.append(text)
-                # Index it
                 entities = self.extract_entities(text)
                 for entity in entities:
                     self.entity_index[entity.lower()].append(text)
@@ -426,7 +409,6 @@ class KeyGenAI:
                     self.ngram_index[ngram].append(text)
                 self.word_freq.update(tokens)
                 
-                # Save to file
                 try:
                     with open(self.user_mem_file, 'a', encoding='utf-8') as f:
                         f.write(text.strip() + "\n")
@@ -447,7 +429,6 @@ class KeyGenAI:
     
     def load_all_data(self):
         """Load all knowledge sources."""
-        # Load JSON knowledge base
         try:
             if os.path.exists(self.data_file):
                 with open(self.data_file, 'r', encoding='utf-8') as f:
@@ -459,7 +440,6 @@ class KeyGenAI:
         except:
             self.knowledge_base = []
         
-        # Load GK facts
         try:
             if os.path.exists(self.gk_file):
                 with open(self.gk_file, 'r', encoding='utf-8') as f:
@@ -471,7 +451,6 @@ class KeyGenAI:
         except:
             self.gk_base = []
         
-        # Load learned facts
         try:
             if os.path.exists(self.learned_file):
                 with open(self.learned_file, 'r', encoding='utf-8') as f:
@@ -479,7 +458,6 @@ class KeyGenAI:
         except:
             self.learned_facts = {}
         
-        # Load raw text files
         self.raw_data_chunks = []
         if os.path.exists(self.knowledge_dir):
             for filename in os.listdir(self.knowledge_dir):
@@ -489,7 +467,6 @@ class KeyGenAI:
                         with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
                             text = f.read()
                             if text.strip():
-                                # Split into sentences
                                 sentences = re.split(r'(?<=[.!?])\s+', text)
                                 self.raw_data_chunks.extend([s.strip() for s in sentences if len(s) > 10])
                     except:
@@ -543,7 +520,6 @@ class KeyGenAI:
         # Learning commands
         if low.startswith("learn "):
             content = raw[6:].strip()
-            # Check if it's a Q&A format
             if " : " in content or " = " in content or " -> " in content:
                 separator = " : " if " : " in content else (" = " if " = " in content else " -> ")
                 parts = content.split(separator, 1)
@@ -552,7 +528,6 @@ class KeyGenAI:
                     self.learn_fact(question, answer)
                     return f"✅ Learned: '{question}' → '{answer}'"
             
-            # Learn from statement
             if self.learn_from_statement(content):
                 return f"✅ Learned from: '{content[:100]}...'"
             return "Please use format: learn question : answer"
@@ -570,12 +545,10 @@ class KeyGenAI:
         # Try to answer from knowledge
         answer = self.generate_answer(raw)
         if answer:
-            # Learn from statements (non-questions)
             if "?" not in raw:
                 self.learn_from_statement(raw)
             return self.grammar_checker(answer)
         
-        # Learn from statement if not a question
         if "?" not in raw:
             self.learn_from_statement(raw)
             return "I've noted that. Feel free to ask me questions or teach me with 'learn question : answer'."
@@ -592,148 +565,16 @@ class ChatHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header('Content-type', 'text/html')
             self.end_headers()
-            html = '''<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KeyGen.ai - Knowledge Engine</title>
-    <style>
-        :root { --bg: #000; --surface: #0a0a0a; --surface2: #111; --border: #1a1a1a; --text: #fff; --text-secondary: #888; --glow: #fff; --accent: #6C63FF; }
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 16px; }
-        .container { background: var(--surface); border-radius: 20px; max-width: 800px; width: 100%; overflow: hidden; border: 1px solid var(--border); box-shadow: 0 0 30px rgba(108,99,255,0.05); }
-        .header { padding: 20px 24px; display: flex; align-items: center; gap: 14px; border-bottom: 1px solid var(--border); background: var(--surface2); }
-        .header-icon { width: 42px; height: 42px; background: var(--bg); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 22px; border: 1px solid var(--border); }
-        .header-text h1 { color: var(--text); font-size: 18px; font-weight: 600; }
-        .header-text p { color: var(--text-secondary); font-size: 12px; }
-        .status-dot { width: 6px; height: 6px; background: #4CAF50; border-radius: 50%; display: inline-block; margin-right: 6px; box-shadow: 0 0 8px #4CAF50; animation: glow 2s infinite; }
-        @keyframes glow { 0%, 100% { box-shadow: 0 0 8px #4CAF50; } 50% { box-shadow: 0 0 16px #4CAF50; } }
-        #chat-container { height: 450px; overflow-y: auto; padding: 20px; background: var(--surface); scroll-behavior: smooth; }
-        #chat-container::-webkit-scrollbar { width: 4px; } #chat-container::-webkit-scrollbar-track { background: transparent; } #chat-container::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-        .message-wrapper { display: flex; margin-bottom: 16px; animation: slideIn 0.25s ease-out; }
-        @keyframes slideIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-        .message-wrapper.user { justify-content: flex-end; }
-        .message { max-width: 78%; padding: 12px 16px; border-radius: 16px; position: relative; line-height: 1.45; font-size: 14px; word-wrap: break-word; white-space: pre-wrap; }
-        .message-wrapper.user .message { background: var(--text); color: var(--bg); border-bottom-right-radius: 4px; font-weight: 500; }
-        .message-wrapper.ai .message { background: var(--surface2); color: var(--text); border-bottom-left-radius: 4px; border: 1px solid var(--border); }
-        .message-avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; margin: 0 8px; }
-        .message-wrapper.ai .message-avatar { background: var(--surface2); border: 1px solid var(--border); } .message-wrapper.user .message-avatar { background: var(--text); color: var(--bg); }
-        .typing-indicator { display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: var(--surface2); border-radius: 16px; border-bottom-left-radius: 4px; border: 1px solid var(--border); max-width: 80px; }
-        .typing-dot { width: 6px; height: 6px; background: var(--text-secondary); border-radius: 50%; animation: typing 1.4s infinite; }
-        .typing-dot:nth-child(2) { animation-delay: 0.2s; } .typing-dot:nth-child(3) { animation-delay: 0.4s; }
-        @keyframes typing { 0%, 60%, 100% { transform: translateY(0); opacity: 0.3; } 30% { transform: translateY(-6px); opacity: 1; } }
-        .input-container { padding: 16px 20px; background: var(--surface2); border-top: 1px solid var(--border); display: flex; gap: 10px; align-items: center; }
-        #input { flex: 1; padding: 12px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; color: var(--text); font-size: 14px; outline: none; transition: all 0.2s; }
-        #input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(108,99,255,0.1); } #input::placeholder { color: #444; }
-        .btn { height: 42px; border: 1px solid var(--border); border-radius: 12px; color: var(--text); font-size: 14px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: var(--surface); }
-        .send-btn { width: 42px; font-size: 18px; } .send-btn:hover { background: var(--accent); color: white; border-color: var(--accent); }
-        .stop-btn { width: 42px; font-size: 16px; display: none; } .stop-btn:hover { background: #ff3333; border-color: #ff3333; color: white; } .stop-btn.active { display: flex; } .send-btn.hidden { display: none; }
-        .suggestions { display: flex; gap: 8px; padding: 12px 20px; flex-wrap: wrap; background: var(--surface); }
-        .suggestion-chip { padding: 7px 14px; background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; color: var(--text-secondary); font-size: 12px; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
-        .suggestion-chip:hover { background: var(--accent); color: white; border-color: var(--accent); }
-        .timestamp { font-size: 10px; color: #444; margin-top: 4px; padding: 0 8px; }
-        @media (max-width: 600px) { body { padding: 0; } .container { border-radius: 0; height: 100vh; display: flex; flex-direction: column; } #chat-container { flex: 1; height: auto; } .message { max-width: 85%; } }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <div class="header-icon">🧠</div>
-            <div class="header-text">
-                <h1>KeyGen.ai</h1>
-                <p><span class="status-dot"></span>Knowledge Engine</p>
-            </div>
-        </div>
-        <div id="chat-container">
-            <div class="message-wrapper ai">
-                <div class="message-avatar">🧠</div>
-                <div>
-                    <div class="message">Hello! 👋 I'm KeyGen.ai, a pure knowledge engine. I learn from everything you feed me. Ask me anything or teach me with: <b>learn question : answer</b></div>
-                    <div class="timestamp">Just now</div>
-                </div>
-            </div>
-        </div>
-        <div class="suggestions">
-            <span class="suggestion-chip" onclick="useSuggestion(this)">What is artificial intelligence?</span>
-            <span class="suggestion-chip" onclick="useSuggestion(this)">Who won the World Cup 2022?</span>
-            <span class="suggestion-chip" onclick="useSuggestion(this)">status</span>
-            <span class="suggestion-chip" onclick="useSuggestion(this)">reload knowledge</span>
-        </div>
-        <div class="input-container">
-            <input type="text" id="input" placeholder="Ask or teach me something..." autofocus>
-            <button class="btn send-btn" id="sendBtn" onclick="sendMessage()">➤</button>
-            <button class="btn stop-btn" id="stopBtn" onclick="stopGeneration()">■</button>
-        </div>
-    </div>
-    <script>
-        const chatContainer = document.getElementById('chat-container');
-        const input = document.getElementById('input');
-        const sendBtn = document.getElementById('sendBtn');
-        const stopBtn = document.getElementById('stopBtn');
-        let isGenerating = false;
-        let abortController = null;
-
-        function getTime() { return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
-        function addMessage(text, isUser) {
-            const wrapper = document.createElement('div');
-            wrapper.className = 'message-wrapper ' + (isUser ? 'user' : 'ai');
-            const avatar = document.createElement('div'); avatar.className = 'message-avatar'; avatar.textContent = isUser ? '👤' : '🧠';
-            const container = document.createElement('div');
-            const message = document.createElement('div'); message.className = 'message'; message.textContent = text;
-            const timestamp = document.createElement('div'); timestamp.className = 'timestamp'; timestamp.textContent = getTime();
-            container.appendChild(message); container.appendChild(timestamp);
-            if (isUser) { wrapper.appendChild(container); wrapper.appendChild(avatar); }
-            else { wrapper.appendChild(avatar); wrapper.appendChild(container); }
-            chatContainer.appendChild(wrapper);
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-            return message;
-        }
-        function showTypingIndicator() {
-            const wrapper = document.createElement('div'); wrapper.className = 'message-wrapper ai'; wrapper.id = 'typing-wrapper';
-            const avatar = document.createElement('div'); avatar.className = 'message-avatar'; avatar.textContent = '🧠';
-            const indicator = document.createElement('div'); indicator.className = 'typing-indicator';
-            indicator.innerHTML = '<span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>';
-            wrapper.appendChild(avatar); wrapper.appendChild(indicator);
-            chatContainer.appendChild(wrapper);
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-        }
-        function removeTypingIndicator() { const typing = document.getElementById('typing-wrapper'); if (typing) typing.remove(); }
-        function setGeneratingState(generating) {
-            isGenerating = generating;
-            if (generating) { sendBtn.classList.add('hidden'); stopBtn.classList.add('active'); input.disabled = true; }
-            else { sendBtn.classList.remove('hidden'); stopBtn.classList.remove('active'); input.disabled = false; input.focus(); }
-        }
-        function stopGeneration() { if (abortController) { abortController.abort(); abortController = null; } isGenerating = false; removeTypingIndicator(); setGeneratingState(false); }
-        async function typeWriterEffect(element, text, speed = 10) {
-            element.textContent = '';
-            for (let i = 0; i < text.length; i++) {
-                if (!isGenerating) break;
-                element.textContent += text.charAt(i);
-                chatContainer.scrollTop = chatContainer.scrollHeight;
-                await new Promise(resolve => setTimeout(resolve, speed));
-            }
-        }
-        async function sendMessage() {
-            const message = input.value.trim();
-            if (!message || isGenerating) return;
-            addMessage(message, true); input.value = ''; showTypingIndicator(); setGeneratingState(true);
-            abortController = new AbortController();
-            try {
-                const response = await fetch('/chat', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({message: message}), signal: abortController.signal });
-                const data = await response.json();
-                removeTypingIndicator();
-                if (isGenerating) { const aiMessage = addMessage('', false); await typeWriterEffect(aiMessage, data.response, 10); }
-            } catch (error) { if (error.name !== 'AbortError') { removeTypingIndicator(); addMessage('⚠️ Connection error. Try again.', false); } }
-            setGeneratingState(false); abortController = null;
-        }
-        function useSuggestion(chip) { input.value = chip.textContent; sendMessage(); }
-        input.addEventListener('keypress', function(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
-        input.focus();
-    </script>
-</body>
-</html>'''
-            self.wfile.write(html.encode())
+            
+            # Read the HTML file
+            html_path = os.path.join(os.path.dirname(__file__), 'index.html')
+            try:
+                with open(html_path, 'r', encoding='utf-8') as f:
+                    html = f.read()
+                self.wfile.write(html.encode())
+            except FileNotFoundError:
+                self.wfile.write(b"Error: index.html not found")
+                
         elif self.path == '/health':
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
@@ -750,6 +591,7 @@ class ChatHandler(BaseHTTPRequestHandler):
                 response_text = self.bot.get_response(user_msg)
             except Exception as e:
                 response_text = f"Error: {str(e)}"
+            
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
@@ -769,8 +611,10 @@ def run_server():
     port = int(os.environ.get("PORT", 10000))
     bot = KeyGenAI()
     ChatHandler.bot = bot
+    
     server_address = ('0.0.0.0', port)
     server = HTTPServer(server_address, ChatHandler)
+    
     print(f"""
 ╔══════════════════════════════════════════╗
 ║       🧠 KeyGen.ai ONLINE               ║
@@ -779,6 +623,7 @@ def run_server():
 ║   No external web - All local           ║
 ╚══════════════════════════════════════════╝
     """)
+    
     try:
         server.serve_forever()
     except KeyboardInterrupt:
