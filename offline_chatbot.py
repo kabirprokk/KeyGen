@@ -105,7 +105,6 @@ class KeyGenAI:
         return text
 
     def summarize_text(self, text, max_sentences=3):
-        """Extract most relevant sentences based on keyword density."""
         if not text:
             return text
         sentences = re.split(r'(?<=[.!?])\s+', text)
@@ -148,118 +147,7 @@ class KeyGenAI:
             print(f"Request error: {e}")
             return None
 
-    def web_search(self, query):
-        """Enhanced multi‑source search returning the most accurate snippet."""
-        if not query:
-            return None
-
-        cache_key = hashlib.md5(query.lower().encode()).hexdigest()
-        if cache_key in self.search_cache:
-            entry = self.search_cache[cache_key]
-            if time.time() - entry['timestamp'] < 3600:
-                print("✓ Cache hit")
-                return entry['data']
-
-        print(f"🔍 Searching for: {query}")
-
-        # 1. DuckDuckGo Instant Answer (no HTML parsing needed)
-        try:
-            ddg_url = f"https://api.duckduckgo.com/?q={urllib.parse.quote(query)}&format=json&no_html=1&skip_disambig=1"
-            data = self.make_http_request(ddg_url, json_response=True)
-            if data:
-                abstract = data.get('AbstractText', '')
-                if abstract and len(abstract) > 50:
-                    result = self.clean_text(abstract)
-                    if result:
-                        self.cache_result(cache_key, result)
-                        return result
-                answer = data.get('Answer', '')
-                if answer and len(answer) > 20:
-                    result = self.clean_text(answer)
-                    if result:
-                        self.cache_result(cache_key, result)
-                        return result
-        except Exception as e:
-            print(f"DuckDuckGo API error: {e}")
-
-        # 2. Google search – extract featured snippet and knowledge panels
-        google_html = self.make_http_request(
-            f"https://www.google.com/search?q={urllib.parse.quote(query)}&hl=en"
-        )
-        if google_html:
-            snippet = self.extract_google_snippet(google_html)
-            if snippet:
-                result = self.clean_text(snippet)
-                if result and len(result) > 50:
-                    self.cache_result(cache_key, result)
-                    return result
-
-        # 3. Wikipedia (most reliable for factual topics)
-        wiki_result = self.search_wikipedia(query)
-        if wiki_result:
-            result = self.clean_text(wiki_result)
-            if result and len(result) > 50:
-                self.cache_result(cache_key, result)
-                return result
-
-        # 4. Fallback to DuckDuckGo HTML results (simple snippet extraction)
-        ddg_html = self.make_http_request(
-            f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(query)}"
-        )
-        if ddg_html:
-            snippets = re.findall(r'<a class="result__snippet"[^>]*>(.*?)</a>', ddg_html, re.DOTALL)
-            if snippets:
-                text = re.sub(r'<.*?>', '', max(snippets, key=len)).strip()
-                if len(text) > 60:
-                    result = self.clean_text(text)
-                    if result:
-                        self.cache_result(cache_key, result)
-                        return result
-
-        print("❌ No good answer found")
-        return None
-
-    def extract_google_snippet(self, html):
-        """Extract the most relevant snippet from Google's SERP."""
-        patterns = [
-            r'<div class="BNeawe\s+s3v9rd\s+AP7Wnd">(.*?)</div>',  # main snippet
-            r'<span class="st">(.*?)</span>',                      # organic result snippet
-            r'<div class="kno-rdesc">.*?<span[^>]*>(.*?)</span>',  # knowledge panel description
-            r'<div class="LGOjhe"[^>]*>.*?<span[^>]*>(.*?)</span>', # another knowledge panel
-        ]
-        for pattern in patterns:
-            match = re.search(pattern, html, re.DOTALL)
-            if match:
-                text = re.sub(r'<.*?>', '', match.group(1))
-                text = re.sub(r'\s+', ' ', text).strip()
-                if 60 < len(text) < 2000:
-                    return text
-        paragraphs = re.findall(r'<p[^>]*>(.*?)</p>', html, re.DOTALL)
-        for p in paragraphs:
-            clean = re.sub(r'<.*?>', '', p).strip()
-            if len(clean) > 150:
-                return clean
-        return None
-
-    def search_wikipedia(self, query):
-        """Get introductory extract from Wikipedia."""
-        try:
-            api_url = f"https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch={urllib.parse.quote(query)}&format=json&srlimit=1"
-            data = self.make_http_request(api_url, json_response=True)
-            if not data or not data.get('query', {}).get('search'):
-                return None
-            page_id = data['query']['search'][0]['pageid']
-            extract_url = f"https://en.wikipedia.org/w/api.php?action=query&prop=extracts&exintro=1&explaintext=1&pageids={page_id}&format=json"
-            extract_data = self.make_http_request(extract_url, json_response=True)
-            pages = extract_data.get('query', {}).get('pages', {})
-            for pid, page in pages.items():
-                return page.get('extract', '')[:1200]
-        except:
-            pass
-        return None
-
     def clean_text(self, text):
-        """Remove HTML, common noise, and trim whitespace."""
         clean = re.sub(r'<.*?>', '', text)
         noise = ['click here', 'read more', 'cookie', 'privacy policy', 'subscribe', 'advertisement', '©']
         for n in noise:
@@ -285,6 +173,141 @@ class KeyGenAI:
                 pass
         return clean
 
+    # ---------- ENHANCED SEARCH ENGINE ----------
+    def web_search(self, query):
+        """Multi‑source search returning the most accurate snippet, with ranking."""
+        if not query:
+            return None
+
+        cache_key = hashlib.md5(query.lower().encode()).hexdigest()
+        if cache_key in self.search_cache:
+            entry = self.search_cache[cache_key]
+            if time.time() - entry['timestamp'] < 3600:
+                print("✓ Cache hit")
+                return entry['data']
+
+        print(f"🔍 Searching for: {query}")
+        candidates = []
+
+        # 1. Wikipedia – most reliable for factual definitions
+        wiki = self.search_wikipedia(query)
+        if wiki:
+            candidates.append(("wikipedia", wiki))
+
+        # 2. DuckDuckGo Instant Answer (clean JSON)
+        try:
+            ddg_url = f"https://api.duckduckgo.com/?q={urllib.parse.quote(query)}&format=json&no_html=1&skip_disambig=1"
+            data = self.make_http_request(ddg_url, json_response=True)
+            if data:
+                abstract = data.get('AbstractText', '')
+                if abstract and len(abstract) > 50:
+                    candidates.append(("ddg_abstract", abstract))
+                answer = data.get('Answer', '')
+                if answer and len(answer) > 20:
+                    candidates.append(("ddg_answer", answer))
+        except Exception as e:
+            print(f"DuckDuckGo API error: {e}")
+
+        # 3. Google – featured snippet + knowledge panel
+        google_html = self.make_http_request(
+            f"https://www.google.com/search?q={urllib.parse.quote(query)}&hl=en"
+        )
+        if google_html:
+            snippet = self.extract_google_snippet(google_html)
+            if snippet:
+                candidates.append(("google_snippet", snippet))
+            kp = self.extract_google_knowledge_panel(google_html)
+            if kp:
+                candidates.append(("google_kp", kp))
+
+        # 4. DuckDuckGo HTML snippets
+        ddg_html = self.make_http_request(
+            f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(query)}"
+        )
+        if ddg_html:
+            snippets = re.findall(r'<a class="result__snippet"[^>]*>(.*?)</a>', ddg_html, re.DOTALL)
+            if snippets:
+                text = re.sub(r'<.*?>', '', max(snippets, key=len)).strip()
+                if len(text) > 60:
+                    candidates.append(("ddg_html", text))
+
+        if not candidates:
+            print("❌ No results")
+            return None
+
+        # Rank candidates: prefer sources that contain question keywords
+        question_words = set(self.tokenize(query))
+        best_source, best_text = max(
+            candidates,
+            key=lambda c: (
+                len(question_words.intersection(set(self.tokenize(c[1])))) * 10
+                + (len(c[1]) > 100) * 5
+                + (c[0] == "wikipedia") * 8
+                + (c[0] == "google_kp") * 7
+                + (c[0] == "ddg_abstract") * 3
+            )
+        )
+        best_text = self.clean_text(best_text)
+        if len(best_text) > 50:
+            self.cache_result(cache_key, best_text)
+            self.polish_and_save_web_data(best_text)
+            return best_text
+        return None
+
+    def extract_google_snippet(self, html):
+        """Featured snippet or organic result text."""
+        patterns = [
+            r'<div class="BNeawe\s+s3v9rd\s+AP7Wnd">(.*?)</div>',  # main snippet
+            r'<span class="st">(.*?)</span>',                      # organic snippet
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, html, re.DOTALL)
+            if match:
+                text = re.sub(r'<.*?>', '', match.group(1))
+                text = re.sub(r'\s+', ' ', text).strip()
+                if 60 < len(text) < 2000:
+                    return text
+        return None
+
+    def extract_google_knowledge_panel(self, html):
+        """Extract description from knowledge panel (e.g., definitions)."""
+        # Class kno-rdesc contains a span with the description
+        match = re.search(r'<div class="kno-rdesc"[^>]*>.*?<span[^>]*>(.*?)</span>', html, re.DOTALL)
+        if match:
+            text = re.sub(r'<.*?>', '', match.group(1)).strip()
+            if 40 < len(text) < 1000:
+                return text
+        # Alternative: class "LGOjhe"
+        match = re.search(r'<div class="LGOjhe"[^>]*>.*?<span[^>]*>(.*?)</span>', html, re.DOTALL)
+        if match:
+            text = re.sub(r'<.*?>', '', match.group(1)).strip()
+            if 40 < len(text) < 1000:
+                return text
+        # Also try "kno-ecr-pt" (entity description)
+        match = re.search(r'<div class="kno-ecr-pt"[^>]*>(.*?)</div>', html, re.DOTALL)
+        if match:
+            text = re.sub(r'<.*?>', '', match.group(1)).strip()
+            if 40 < len(text) < 1000:
+                return text
+        return None
+
+    def search_wikipedia(self, query):
+        try:
+            api_url = f"https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch={urllib.parse.quote(query)}&format=json&srlimit=1"
+            data = self.make_http_request(api_url, json_response=True)
+            if not data or not data.get('query', {}).get('search'):
+                return None
+            page_id = data['query']['search'][0]['pageid']
+            extract_url = f"https://en.wikipedia.org/w/api.php?action=query&prop=extracts&exintro=1&explaintext=1&pageids={page_id}&format=json"
+            extract_data = self.make_http_request(extract_url, json_response=True)
+            pages = extract_data.get('query', {}).get('pages', {})
+            for pid, page in pages.items():
+                return page.get('extract', '')[:1200]
+        except:
+            pass
+        return None
+
+    # ---------- LOCAL KNOWLEDGE (IMPROVED) ----------
     def calculate_relevance_score(self, question, text):
         if not question or not text:
             return 0
@@ -292,9 +315,16 @@ class KeyGenAI:
         t_words = set(self.tokenize(text))
         if not q_words:
             return 0
+        # Jaccard similarity
         intersection = len(q_words.intersection(t_words))
         union = len(q_words.union(t_words))
-        return intersection / union if union > 0 else 0
+        jaccard = intersection / union if union > 0 else 0
+        # Bonus if a longer phrase from question appears in text
+        phrase_bonus = 0
+        for phrase in re.findall(r'\b\w+(?:\s+\w+){1,3}\b', question.lower()):
+            if phrase in text.lower():
+                phrase_bonus += 0.1
+        return jaccard + phrase_bonus
 
     def search_local_knowledge(self, query):
         if not query:
@@ -307,7 +337,8 @@ class KeyGenAI:
         highest_score = 0
         for sentence in self.raw_data_chunks:
             score = self.calculate_relevance_score(query, sentence)
-            score += sum(1 for kw in keywords if kw in sentence.lower()) * 0.1
+            # Boost sentences that contain more keywords
+            score += sum(1 for kw in keywords if kw in sentence.lower()) * 0.05
             if score > highest_score:
                 highest_score = score
                 best_match = sentence
@@ -316,20 +347,21 @@ class KeyGenAI:
     def get_answer_with_fallback(self, question):
         if not question:
             return None
-        # 1. GK Base
+        # 1. GK Base (fact engine)
         for fact in self.gk_base:
             if fact.get("q", "").lower() in question.lower():
                 return fact["a"]
-        # 2. Knowledge modules
+        # 2. Knowledge modules (JSON)
         for module in self.knowledge_base:
             for pattern in module.get("patterns", []):
                 if pattern.lower() in question.lower():
                     return random.choice(module["responses"])
-        # 3. Local text files
+        # 3. Local text files (lowered threshold to 0.2)
         local_result, confidence = self.search_local_knowledge(question)
-        if local_result and confidence > 0.35 and len(local_result) > 80:
+        if local_result and confidence > 0.2 and len(local_result) > 50:
+            print(f"✓ Local knowledge match (confidence: {confidence:.2f})")
             return local_result
-        # 4. Internet search
+        # 4. Internet search (accurate multi‑source)
         web_result = self.web_search(question)
         if web_result:
             return web_result
@@ -381,11 +413,9 @@ class KeyGenAI:
         raw = user_input.strip()
         low = raw.lower()
 
-        # Greetings
         if self.is_greeting(raw):
             return self.get_greeting_response()
 
-        # Learn command
         if low.startswith("learn about "):
             topic = raw[12:].strip()
             result = self.web_search(topic)
@@ -394,25 +424,25 @@ class KeyGenAI:
                 return self.truncate_answer(f"Learned about {topic}: {summarized}", 400)
             return f"Couldn't find information about '{topic}'."
 
-        # Detect question
         is_question = ("?" in raw or low.startswith(("what", "why", "how", "where", "when", "who",
                                                        "which", "can", "is", "are", "do", "does",
                                                        "explain", "tell", "describe", "define")))
         if is_question:
             answer = self.get_answer_with_fallback(raw)
             if answer:
+                # Only summarize if longer than 600 chars, otherwise return as is
                 if len(answer) > 600:
                     answer = self.summarize_text(answer, max_sentences=3)
                 answer = self.truncate_answer(answer, 500)
                 return self.grammar_checker(answer)
             return "I couldn't find a reliable answer. Try rephrasing your question."
 
-        # Non‑question – try to find relevant info
+        # Non‑question – try to give relevant info
         tokens = self.tokenize(low)
         keywords = [t for t in tokens if t not in self.stopwords and len(t) > 2]
         if keywords:
             local, conf = self.search_local_knowledge(raw)
-            if local and conf > 0.35 and len(local) > 80:
+            if local and conf > 0.2 and len(local) > 50:
                 return self.truncate_answer(local, 400)
             web = self.web_search(raw)
             if web:
@@ -421,9 +451,10 @@ class KeyGenAI:
         return "I'm not sure about that. Could you rephrase your question?"
 
 
+# ---------- WEB SERVER (same clean UI) ----------
 class ChatHandler(BaseHTTPRequestHandler):
     bot = None
-    
+
     def do_GET(self):
         if self.path == '/' or self.path == '/index.html':
             self.send_response(200)
@@ -446,13 +477,9 @@ class ChatHandler(BaseHTTPRequestHandler):
                         --text-secondary: #888888;
                         --glow: #ffffff;
                     }
-                    
                     * {
-                        margin: 0;
-                        padding: 0;
-                        box-sizing: border-box;
+                        margin: 0; padding: 0; box-sizing: border-box;
                     }
-                    
                     body {
                         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
                         background: var(--bg);
@@ -462,7 +489,6 @@ class ChatHandler(BaseHTTPRequestHandler):
                         align-items: center;
                         padding: 16px;
                     }
-                    
                     .container {
                         background: var(--surface);
                         border-radius: 20px;
@@ -472,7 +498,6 @@ class ChatHandler(BaseHTTPRequestHandler):
                         border: 1px solid var(--border);
                         box-shadow: 0 0 30px rgba(255,255,255,0.03), 0 0 60px rgba(255,255,255,0.01);
                     }
-                    
                     .header {
                         padding: 20px 24px;
                         display: flex;
@@ -481,10 +506,8 @@ class ChatHandler(BaseHTTPRequestHandler):
                         border-bottom: 1px solid var(--border);
                         background: var(--surface2);
                     }
-                    
                     .header-icon {
-                        width: 42px;
-                        height: 42px;
+                        width: 42px; height: 42px;
                         background: var(--bg);
                         border-radius: 12px;
                         display: flex;
@@ -494,22 +517,18 @@ class ChatHandler(BaseHTTPRequestHandler):
                         border: 1px solid var(--border);
                         box-shadow: 0 0 15px rgba(255,255,255,0.05);
                     }
-                    
                     .header-text h1 {
                         color: var(--text);
                         font-size: 18px;
                         font-weight: 600;
                         letter-spacing: -0.3px;
                     }
-                    
                     .header-text p {
                         color: var(--text-secondary);
                         font-size: 12px;
                     }
-                    
                     .status-dot {
-                        width: 6px;
-                        height: 6px;
+                        width: 6px; height: 6px;
                         background: var(--glow);
                         border-radius: 50%;
                         display: inline-block;
@@ -517,12 +536,10 @@ class ChatHandler(BaseHTTPRequestHandler):
                         box-shadow: 0 0 8px var(--glow);
                         animation: glow 2s infinite;
                     }
-                    
                     @keyframes glow {
                         0%, 100% { box-shadow: 0 0 8px var(--glow); }
                         50% { box-shadow: 0 0 16px var(--glow); }
                     }
-                    
                     #chat-container {
                         height: 420px;
                         overflow-y: auto;
@@ -530,35 +547,28 @@ class ChatHandler(BaseHTTPRequestHandler):
                         background: var(--surface);
                         scroll-behavior: smooth;
                     }
-                    
                     #chat-container::-webkit-scrollbar {
                         width: 4px;
                     }
-                    
                     #chat-container::-webkit-scrollbar-track {
                         background: transparent;
                     }
-                    
                     #chat-container::-webkit-scrollbar-thumb {
                         background: var(--border);
                         border-radius: 2px;
                     }
-                    
                     .message-wrapper {
                         display: flex;
                         margin-bottom: 16px;
                         animation: slideIn 0.25s ease-out;
                     }
-                    
                     @keyframes slideIn {
                         from { opacity: 0; transform: translateY(8px); }
                         to { opacity: 1; transform: translateY(0); }
                     }
-                    
                     .message-wrapper.user {
                         justify-content: flex-end;
                     }
-                    
                     .message {
                         max-width: 78%;
                         padding: 12px 16px;
@@ -569,24 +579,20 @@ class ChatHandler(BaseHTTPRequestHandler):
                         word-wrap: break-word;
                         white-space: pre-wrap;
                     }
-                    
                     .message-wrapper.user .message {
                         background: var(--text);
                         color: var(--bg);
                         border-bottom-right-radius: 4px;
                         font-weight: 500;
                     }
-                    
                     .message-wrapper.ai .message {
                         background: var(--surface2);
                         color: var(--text);
                         border-bottom-left-radius: 4px;
                         border: 1px solid var(--border);
                     }
-                    
                     .message-avatar {
-                        width: 32px;
-                        height: 32px;
+                        width: 32px; height: 32px;
                         border-radius: 50%;
                         display: flex;
                         align-items: center;
@@ -595,17 +601,14 @@ class ChatHandler(BaseHTTPRequestHandler):
                         flex-shrink: 0;
                         margin: 0 8px;
                     }
-                    
                     .message-wrapper.ai .message-avatar {
                         background: var(--surface2);
                         border: 1px solid var(--border);
                     }
-                    
                     .message-wrapper.user .message-avatar {
                         background: var(--text);
                         color: var(--bg);
                     }
-                    
                     .typing-indicator {
                         display: flex;
                         align-items: center;
@@ -617,23 +620,18 @@ class ChatHandler(BaseHTTPRequestHandler):
                         border: 1px solid var(--border);
                         max-width: 80px;
                     }
-                    
                     .typing-dot {
-                        width: 6px;
-                        height: 6px;
+                        width: 6px; height: 6px;
                         background: var(--text-secondary);
                         border-radius: 50%;
                         animation: typing 1.4s infinite;
                     }
-                    
                     .typing-dot:nth-child(2) { animation-delay: 0.2s; }
                     .typing-dot:nth-child(3) { animation-delay: 0.4s; }
-                    
                     @keyframes typing {
                         0%, 60%, 100% { transform: translateY(0); opacity: 0.3; }
                         30% { transform: translateY(-6px); opacity: 1; }
                     }
-                    
                     .input-container {
                         padding: 16px 20px;
                         background: var(--surface2);
@@ -642,7 +640,6 @@ class ChatHandler(BaseHTTPRequestHandler):
                         gap: 10px;
                         align-items: center;
                     }
-                    
                     #input {
                         flex: 1;
                         padding: 12px 16px;
@@ -654,16 +651,13 @@ class ChatHandler(BaseHTTPRequestHandler):
                         outline: none;
                         transition: all 0.2s;
                     }
-                    
                     #input:focus {
                         border-color: var(--text);
                         box-shadow: 0 0 0 2px rgba(255,255,255,0.05);
                     }
-                    
                     #input::placeholder {
                         color: #444;
                     }
-                    
                     .btn {
                         height: 42px;
                         border: 1px solid var(--border);
@@ -678,38 +672,31 @@ class ChatHandler(BaseHTTPRequestHandler):
                         flex-shrink: 0;
                         background: var(--surface);
                     }
-                    
                     .send-btn {
                         width: 42px;
                         font-size: 18px;
                     }
-                    
                     .send-btn:hover {
                         background: var(--text);
                         color: var(--bg);
                         border-color: var(--text);
                     }
-                    
                     .stop-btn {
                         width: 42px;
                         font-size: 16px;
                         display: none;
                     }
-                    
                     .stop-btn:hover {
                         background: #ff3333;
                         border-color: #ff3333;
                         color: white;
                     }
-                    
                     .stop-btn.active {
                         display: flex;
                     }
-                    
                     .send-btn.hidden {
                         display: none;
                     }
-                    
                     .suggestions {
                         display: flex;
                         gap: 8px;
@@ -717,7 +704,6 @@ class ChatHandler(BaseHTTPRequestHandler):
                         flex-wrap: wrap;
                         background: var(--surface);
                     }
-                    
                     .suggestion-chip {
                         padding: 7px 14px;
                         background: var(--surface2);
@@ -729,20 +715,17 @@ class ChatHandler(BaseHTTPRequestHandler):
                         transition: all 0.2s;
                         white-space: nowrap;
                     }
-                    
                     .suggestion-chip:hover {
                         background: var(--text);
                         color: var(--bg);
                         border-color: var(--text);
                     }
-                    
                     .timestamp {
                         font-size: 10px;
                         color: #444;
                         margin-top: 4px;
                         padding: 0 8px;
                     }
-                    
                     @media (max-width: 600px) {
                         body { padding: 0; }
                         .container { border-radius: 0; height: 100vh; display: flex; flex-direction: column; }
@@ -760,7 +743,6 @@ class ChatHandler(BaseHTTPRequestHandler):
                             <p><span class="status-dot"></span>Online</p>
                         </div>
                     </div>
-                    
                     <div id="chat-container">
                         <div class="message-wrapper ai">
                             <div class="message-avatar">🤖</div>
@@ -770,54 +752,44 @@ class ChatHandler(BaseHTTPRequestHandler):
                             </div>
                         </div>
                     </div>
-                    
                     <div class="suggestions">
                         <span class="suggestion-chip" onclick="useSuggestion(this)">What is AI?</span>
                         <span class="suggestion-chip" onclick="useSuggestion(this)">How does ML work?</span>
                         <span class="suggestion-chip" onclick="useSuggestion(this)">Quantum computing</span>
                         <span class="suggestion-chip" onclick="useSuggestion(this)">What is blockchain?</span>
                     </div>
-                    
                     <div class="input-container">
                         <input type="text" id="input" placeholder="Ask anything..." autofocus>
                         <button class="btn send-btn" id="sendBtn" onclick="sendMessage()">➤</button>
                         <button class="btn stop-btn" id="stopBtn" onclick="stopGeneration()">■</button>
                     </div>
                 </div>
-                
                 <script>
                     const chatContainer = document.getElementById('chat-container');
                     const input = document.getElementById('input');
                     const sendBtn = document.getElementById('sendBtn');
                     const stopBtn = document.getElementById('stopBtn');
-                    
                     let isGenerating = false;
                     let abortController = null;
-                    
+
                     function getTime() {
                         return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                     }
-                    
                     function addMessage(text, isUser) {
                         const wrapper = document.createElement('div');
                         wrapper.className = 'message-wrapper ' + (isUser ? 'user' : 'ai');
-                        
                         const avatar = document.createElement('div');
                         avatar.className = 'message-avatar';
                         avatar.textContent = isUser ? '👤' : '🤖';
-                        
                         const container = document.createElement('div');
                         const message = document.createElement('div');
                         message.className = 'message';
                         message.textContent = text;
-                        
                         const timestamp = document.createElement('div');
                         timestamp.className = 'timestamp';
                         timestamp.textContent = getTime();
-                        
                         container.appendChild(message);
                         container.appendChild(timestamp);
-                        
                         if (isUser) {
                             wrapper.appendChild(container);
                             wrapper.appendChild(avatar);
@@ -825,37 +797,29 @@ class ChatHandler(BaseHTTPRequestHandler):
                             wrapper.appendChild(avatar);
                             wrapper.appendChild(container);
                         }
-                        
                         chatContainer.appendChild(wrapper);
                         chatContainer.scrollTop = chatContainer.scrollHeight;
-                        
                         return message;
                     }
-                    
                     function showTypingIndicator() {
                         const wrapper = document.createElement('div');
                         wrapper.className = 'message-wrapper ai';
                         wrapper.id = 'typing-wrapper';
-                        
                         const avatar = document.createElement('div');
                         avatar.className = 'message-avatar';
                         avatar.textContent = '🤖';
-                        
                         const indicator = document.createElement('div');
                         indicator.className = 'typing-indicator';
                         indicator.innerHTML = '<span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>';
-                        
                         wrapper.appendChild(avatar);
                         wrapper.appendChild(indicator);
                         chatContainer.appendChild(wrapper);
                         chatContainer.scrollTop = chatContainer.scrollHeight;
                     }
-                    
                     function removeTypingIndicator() {
                         const typing = document.getElementById('typing-wrapper');
                         if (typing) typing.remove();
                     }
-                    
                     function setGeneratingState(generating) {
                         isGenerating = generating;
                         if (generating) {
@@ -869,7 +833,6 @@ class ChatHandler(BaseHTTPRequestHandler):
                             input.focus();
                         }
                     }
-                    
                     function stopGeneration() {
                         if (abortController) {
                             abortController.abort();
@@ -879,7 +842,6 @@ class ChatHandler(BaseHTTPRequestHandler):
                         removeTypingIndicator();
                         setGeneratingState(false);
                     }
-                    
                     async function typeWriterEffect(element, text, speed = 12) {
                         element.textContent = '';
                         for (let i = 0; i < text.length; i++) {
@@ -889,18 +851,14 @@ class ChatHandler(BaseHTTPRequestHandler):
                             await new Promise(resolve => setTimeout(resolve, speed));
                         }
                     }
-                    
                     async function sendMessage() {
                         const message = input.value.trim();
                         if (!message || isGenerating) return;
-                        
                         addMessage(message, true);
                         input.value = '';
                         showTypingIndicator();
                         setGeneratingState(true);
-                        
                         abortController = new AbortController();
-                        
                         try {
                             const response = await fetch('/chat', {
                                 method: 'POST',
@@ -909,9 +867,7 @@ class ChatHandler(BaseHTTPRequestHandler):
                                 signal: abortController.signal
                             });
                             const data = await response.json();
-                            
                             removeTypingIndicator();
-                            
                             if (isGenerating) {
                                 const aiMessage = addMessage('', false);
                                 await typeWriterEffect(aiMessage, data.response, 12);
@@ -922,23 +878,19 @@ class ChatHandler(BaseHTTPRequestHandler):
                                 addMessage('⚠️ Connection error. Try again.', false);
                             }
                         }
-                        
                         setGeneratingState(false);
                         abortController = null;
                     }
-                    
                     function useSuggestion(chip) {
                         input.value = chip.textContent;
                         sendMessage();
                     }
-                    
                     input.addEventListener('keypress', function(e) {
                         if (e.key === 'Enter' && !e.shiftKey) {
                             e.preventDefault();
                             sendMessage();
                         }
                     });
-                    
                     input.focus();
                 </script>
             </body>
@@ -955,14 +907,12 @@ class ChatHandler(BaseHTTPRequestHandler):
         if self.path == '/chat':
             content_length = int(self.headers.get('Content-Length', 0))
             post_data = self.rfile.read(content_length)
-            
             try:
                 data = json.loads(post_data)
                 user_msg = data.get('message', '')
                 response_text = self.bot.get_response(user_msg)
             except Exception as e:
                 response_text = f"Error: {str(e)}"
-            
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.send_header('Access-Control-Allow-Origin', '*')
@@ -982,18 +932,9 @@ def run_server():
     port = int(os.environ.get("PORT", 10000))
     bot = KeyGenAI()
     ChatHandler.bot = bot
-    
     server_address = ('0.0.0.0', port)
     server = HTTPServer(server_address, ChatHandler)
-    
-    print(f"""
-╔══════════════════════════════════════╗
-║       🤖 KeyGen.ai ONLINE           ║
-║   http://0.0.0.0:{port}              ║
-║   Accurate Web Search + Clean UI    ║
-╚══════════════════════════════════════╝
-    """)
-    
+    print(f"🤖 KeyGen.ai running on http://0.0.0.0:{port}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
