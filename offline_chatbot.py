@@ -23,40 +23,43 @@ class KeyGenAI:
         self.knowledge_base = []
         self.gk_base = []
         self.search_cache = {}
+        
+        # Google CSE ID
+        self.cse_cx = "c0ddac3f347514713"
+        
         self.stopwords = {
             "a", "an", "the", "and", "or", "but", "is", "are", "was", "were",
             "to", "at", "by", "for", "of", "with", "in", "on", "that", "this",
             "it", "its", "be", "been", "being", "have", "has", "had", "do", "does",
             "did", "will", "would", "could", "should", "may", "might", "can", "shall"
         }
-        # Common country names (lowercase) for nationality detection
+        
+        # Common country names for nationality detection
         self.country_names = {
-            "afghanistan", "albania", "algeria", "andorra", "angola", "argentina", "armenia", "australia",
-            "austria", "azerbaijan", "bahamas", "bahrain", "bangladesh", "barbados", "belarus", "belgium",
-            "belize", "benin", "bhutan", "bolivia", "bosnia", "botswana", "brazil", "brunei", "bulgaria",
-            "burkina faso", "burundi", "cambodia", "cameroon", "canada", "cape verde", "chad", "chile",
-            "china", "colombia", "comoros", "congo", "costa rica", "croatia", "cuba", "cyprus",
-            "czech republic", "denmark", "djibouti", "dominica", "dominican republic", "ecuador", "egypt",
-            "el salvador", "equatorial guinea", "eritrea", "estonia", "ethiopia", "fiji", "finland", "france",
-            "gabon", "gambia", "georgia", "germany", "ghana", "greece", "grenada", "guatemala", "guinea",
-            "guinea-bissau", "guyana", "haiti", "honduras", "hungary", "iceland", "india", "indonesia",
-            "iran", "iraq", "ireland", "israel", "italy", "jamaica", "japan", "jordan", "kazakhstan",
-            "kenya", "kiribati", "korea, north", "korea, south", "kosovo", "kuwait", "kyrgyzstan", "laos",
-            "latvia", "lebanon", "lesotho", "liberia", "libya", "liechtenstein", "lithuania", "luxembourg",
-            "macedonia", "madagascar", "malawi", "malaysia", "maldives", "mali", "malta", "marshall islands",
-            "mauritania", "mauritius", "mexico", "micronesia", "moldova", "monaco", "mongolia", "montenegro",
-            "morocco", "mozambique", "myanmar", "namibia", "nauru", "nepal", "netherlands", "new zealand",
-            "nicaragua", "niger", "nigeria", "norway", "oman", "pakistan", "palau", "panama",
-            "papua new guinea", "paraguay", "peru", "philippines", "poland", "portugal", "qatar", "romania",
-            "russia", "rwanda", "saint kitts", "saint lucia", "saint vincent", "samoa", "san marino",
-            "sao tome", "saudi arabia", "senegal", "serbia", "seychelles", "sierra leone", "singapore",
-            "slovakia", "slovenia", "solomon islands", "somalia", "south africa", "south sudan", "spain",
-            "sri lanka", "sudan", "suriname", "swaziland", "sweden", "switzerland", "syria", "taiwan",
-            "tajikistan", "tanzania", "thailand", "timor-leste", "togo", "tonga", "trinidad and tobago",
-            "tunisia", "turkey", "turkmenistan", "tuvalu", "uganda", "ukraine", "united arab emirates",
-            "united kingdom", "united states", "uruguay", "uzbekistan", "vanuatu", "vatican", "venezuela",
-            "vietnam", "yemen", "zambia", "zimbabwe", "england", "scotland", "wales", "northern ireland"
+            "afghanistan", "albania", "algeria", "argentina", "armenia", "australia",
+            "austria", "azerbaijan", "bahamas", "bahrain", "bangladesh", "belarus",
+            "belgium", "belize", "benin", "bhutan", "bolivia", "bosnia", "botswana",
+            "brazil", "brunei", "bulgaria", "burkina faso", "burundi", "cambodia",
+            "cameroon", "canada", "chad", "chile", "china", "colombia", "congo",
+            "costa rica", "croatia", "cuba", "cyprus", "czech republic", "denmark",
+            "egypt", "england", "ethiopia", "fiji", "finland", "france", "germany",
+            "ghana", "greece", "haiti", "hungary", "iceland", "india", "indonesia",
+            "iran", "iraq", "ireland", "israel", "italy", "jamaica", "japan", "jordan",
+            "kazakhstan", "kenya", "kuwait", "laos", "lebanon", "liberia", "libya",
+            "lithuania", "luxembourg", "madagascar", "malawi", "malaysia", "maldives",
+            "mali", "malta", "mexico", "mongolia", "morocco", "mozambique", "myanmar",
+            "namibia", "nepal", "netherlands", "new zealand", "nicaragua", "niger",
+            "nigeria", "north korea", "norway", "oman", "pakistan", "palestine",
+            "panama", "paraguay", "peru", "philippines", "poland", "portugal", "qatar",
+            "romania", "russia", "rwanda", "saudi arabia", "senegal", "serbia",
+            "singapore", "slovakia", "slovenia", "somalia", "south africa", "south korea",
+            "spain", "sri lanka", "sudan", "sweden", "switzerland", "syria", "taiwan",
+            "tanzania", "thailand", "togo", "trinidad", "tunisia", "turkey", "uganda",
+            "ukraine", "united arab emirates", "united kingdom", "united states",
+            "uruguay", "uzbekistan", "venezuela", "vietnam", "yemen", "zambia", "zimbabwe",
+            "wales", "scotland", "northern ireland", "kosovo", "montenegro", "sudan"
         }
+        
         self.greetings = {
             "patterns": [r'^hi$', r'^hello$', r'^hey$', r'^good morning$', r'^good afternoon$',
                          r'^good evening$', r'^howdy$', r'^greetings$', r'^sup$', r"^what's up$",
@@ -73,14 +76,16 @@ class KeyGenAI:
                 "Welcome! 🤖 How can I help?"
             ]
         }
+        
         self.ssl_context = ssl.create_default_context()
         self.ssl_context.check_hostname = False
         self.ssl_context.verify_mode = ssl.CERT_NONE
+        
         os.makedirs(self.knowledge_dir, exist_ok=True)
         self.load_all_data()
         self.load_search_cache()
 
-    # Cache
+    # ---------- Cache ----------
     def load_search_cache(self):
         try:
             if os.path.exists(self.search_cache_file):
@@ -99,11 +104,13 @@ class KeyGenAI:
         except:
             pass
 
+    # ---------- Tokenization ----------
     def tokenize(self, text):
         if not text:
             return []
         return re.findall(r'\b\w+\b', str(text).lower())
 
+    # ---------- Greetings ----------
     def is_greeting(self, text):
         text_lower = text.lower().strip().rstrip('!.,? ')
         for pattern in self.greetings["patterns"]:
@@ -133,14 +140,14 @@ class KeyGenAI:
 
     def clean_text(self, text):
         clean = re.sub(r'<.*?>', '', text)
-        noise = ['click here', 'read more', 'cookie', 'privacy policy', 'subscribe', 'advertisement', '©']
+        noise = ['click here', 'read more', 'cookie', 'privacy policy', 'subscribe', 'advertisement', '©', 'Cached']
         for n in noise:
             clean = re.sub(r'(?i)' + re.escape(n), '', clean)
         clean = re.sub(r'\s+', ' ', clean).strip()
         clean = re.sub(r'([.!?])\1+', r'\1', clean)
         return clean
 
-    def make_http_request(self, url, timeout=8, json_response=False, headers_extra=None):
+    def make_http_request(self, url, timeout=10, json_response=False, headers_extra=None):
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -157,9 +164,8 @@ class KeyGenAI:
             print(f"Request error: {e}")
             return None
 
-    # ----- Answer extraction -----
+    # ---------- Answer Type Detection ----------
     def detect_question_intent(self, question):
-        """Return the type of answer expected."""
         q = question.lower().strip()
         if q.startswith("who"):
             return "person"
@@ -169,7 +175,7 @@ class KeyGenAI:
             return "disease"
         if q.startswith("which") and ("team" in q or "club" in q or "player" in q):
             return "team_or_person"
-        if q.startswith("which"):
+        if q.startswith("which") or q.startswith("what is the name"):
             return "general_choice"
         if q.startswith("what") and ("disease" in q or "outbreak" in q or "virus" in q):
             return "disease"
@@ -182,72 +188,69 @@ class KeyGenAI:
         return "general"
 
     def build_search_query(self, question):
-        """Reformulate the question to get a more targeted answer."""
         intent = self.detect_question_intent(question)
         q = question.strip()
-        # Remove leading question words
         cleaned = re.sub(r'^(who|what|when|where|why|how|which|is|are|do|does)\s+', '', q, flags=re.I).strip()
+        
         if intent == "person":
-            return f"{cleaned} name who"
+            return f"{cleaned} winner champion name"
         if intent == "country":
-            return f"{cleaned} winner nation"
+            return f"{cleaned} winner champion nation country"
         if intent == "team_or_person":
-            return f"{cleaned} winner"
+            return f"{cleaned} winner champion"
         if intent == "disease":
-            return f"{cleaned} outbreak disease name"
+            return f"{cleaned} outbreak disease virus name"
         if intent == "date":
-            return f"{cleaned} date"
+            return f"{cleaned} date schedule"
         if intent == "place":
-            return f"{cleaned} location"
+            return f"{cleaned} location venue"
         if intent == "number":
-            return f"{cleaned} count"
-        # For general, just add "answer"
-        return f"{cleaned} answer"
+            return f"{cleaned} total count number"
+        return f"{cleaned} answer result"
 
+    # ---------- Entity Extractors ----------
     def extract_winner(self, text):
-        """Try to find a winner/loser/champion from text."""
         patterns = [
-            r'(?:won by|champion[:\s]+|victory for|defeated by|title went to|gold medal to|winner[:\s]+|was awarded to)\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
-            r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+(?:won|claimed|secured|captured|earned|took|retained)',
-            r'(?:defeated|beat|overcame)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
-            r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+(?:is|are|was|were)\s+(?:the\s+)?(?:champion|winner|victor)',
-            r'(?:the\s+)?(?:champion|winner|victor)\s+(?:is|was)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
+            r'(?:won by|champion[:\s]+|victory for|winner[:\s]+|title to|gold to|awarded to)\s*([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*)',
+            r'([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*)\s+(?:won|claimed|secured|captured|earned|took|retained|became|crowned)',
+            r'(?:defeated|beat|overcame)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*)',
+            r'([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*)\s+(?:is|are|was|were)\s+(?:the\s+)?(?:champion|winner|victor)',
+            r'(?:champion|winner)[:\s]+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*)',
+            r'(?:title|trophy)\s+(?:to|went to|won by)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*)',
         ]
         for pattern in patterns:
             match = re.search(pattern, text)
             if match:
-                return match.group(1)
+                winner = match.group(1).strip()
+                if len(winner) > 2 and winner.lower() not in {'the', 'and', 'for', 'was', 'has'}:
+                    return winner
         return None
 
     def extract_country(self, text):
-        """Extract a country name from text using known list + capitalization."""
-        # First try exact match with known countries (case-insensitive)
         text_lower = text.lower()
-        for country in self.country_names:
+        for country in sorted(self.country_names, key=len, reverse=True):
             if country in text_lower:
-                # Return properly capitalized version
                 return country.title()
-        # Fallback: look for a capitalized phrase that might be a country
-        match = re.search(r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b', text)
+        match = re.search(r'(?:won by|champion[:\s]+|winner[:\s]+)\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)', text)
         if match:
             return match.group(1)
         return None
 
     def extract_disease_name(self, text):
         patterns = [
-            r'(?:disease|illness|outbreak)\s+of\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
-            r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+virus',
-            r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+disease',
-            r'called\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)',
+            r'(?:disease|illness|outbreak)\s+(?:of|is|was|called|named)?\s*([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*)',
+            r'([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*)\s+(?:virus|disease|fever|syndrome)',
+            r'called\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*)',
+            r'known as\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*)',
         ]
         for pat in patterns:
             m = re.search(pat, text)
             if m:
-                return m.group(1)
+                return m.group(1).strip()
         return None
 
     def extract_date(self, text):
-        m = re.search(r'(?:\d{1,2}\s+)?(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}', text)
+        m = re.search(r'(?:\d{1,2}\s+)?(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2},?\s+\d{4}', text)
         if m:
             return m.group(0)
         m = re.search(r'\b(20\d{2})\b', text)
@@ -256,190 +259,105 @@ class KeyGenAI:
         return None
 
     def extract_place(self, text):
-        m = re.search(r'(?:in|at|from|to)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)', text)
+        m = re.search(r'(?:in|at|from|to|venue[:\s]+)\s*([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*)', text)
         if m:
             return m.group(1)
         return None
 
-    def extract_best_answer(self, question, text, intent):
-        """Given a text snippet, try to extract the most direct answer."""
+    def extract_answer_from_text(self, question, text, intent):
         if not text:
             return None
-        # Clean
+        
         text = self.clean_text(text)
-        # Try winner extraction first if intent implies a winner
+        
+        # FIXED: De-nested logic blocks so every separate intent executes correctly
         if intent in ("person", "team_or_person", "country", "general_choice"):
             winner = self.extract_winner(text)
             if winner:
                 return winner
+            
         if intent == "country":
             country = self.extract_country(text)
             if country:
                 return country
+        
         if intent == "disease":
             disease = self.extract_disease_name(text)
             if disease:
                 return disease
+        
         if intent == "date":
             date = self.extract_date(text)
             if date:
                 return date
+        
         if intent == "place":
             place = self.extract_place(text)
             if place:
                 return place
-        # Fallback: take the first sentence that seems to contain an answer indicator
+        
+        # Fallback Indicator Search
+        indicator_words = ['won', 'winner', 'champion', 'victory', 'defeated', 'announced', 
+                          'declared', 'confirmed', 'result', 'outcome', 'named', 'selected',
+                          'chosen', 'elected', 'appointed', 'crowned']
+        
         sentences = re.split(r'(?<=[.!?])\s+', text)
-        # Look for sentences with the word "won", "champion", "winner", "awarded", etc.
+        
         for sent in sentences:
-            if re.search(r'(?i)\b(won|champion|victory|awarded|title|gold|medal|defeated)\b', sent):
+            if any(word in sent.lower() for word in indicator_words):
+                for extractor in [self.extract_winner, self.extract_country, 
+                                  self.extract_disease_name, self.extract_date, self.extract_place]:
+                    result = extractor(sent)
+                    if result:
+                        return result
                 return sent.strip()
-        # If nothing, return first sentence
-        if sentences:
-            return sentences[0].strip()
-        return text
+        
+        for sent in sentences:
+            if len(sent) > 20:
+                return sent.strip()
+        
+        return text[:300]
 
-    # ----- Web search (multi‑source) -----
-    def web_search(self, question):
-        cache_key = hashlib.md5(question.lower().encode()).hexdigest()
-        if cache_key in self.search_cache:
-            entry = self.search_cache[cache_key]
-            if time.time() - entry['timestamp'] < 3600:
-                return entry['data']
-
-        print(f"🔍 Searching: {question}")
-        # Check for purely future events
-        years = re.findall(r'\b(20\d{2})\b', question)
-        current_year = time.localtime().tm_year
-        if years and all(int(y) > current_year for y in years):
-            result = "This event is in the future – no reliable data yet."
-            self.search_cache[cache_key] = {'data': result, 'timestamp': time.time()}
-            self.save_search_cache()
-            return result
-
-        intent = self.detect_question_intent(question)
-        search_query = self.build_search_query(question)
-
-        candidates = []
-
-        # 1. DuckDuckGo Instant Answer
+    # ---------- Google CSE Search ----------
+    def search_cse(self, query):
         try:
-            ddg_url = f"https://api.duckduckgo.com/?q={urllib.parse.quote(search_query)}&format=json&no_html=1&skip_disambig=1"
-            data = self.make_http_request(ddg_url, json_response=True)
-            if data:
-                abstract = data.get('AbstractText', '')
-                answer = data.get('Answer', '')
-                if answer and len(answer) > 5:
-                    candidates.append(("ddg_direct", self.clean_text(answer)))
-                elif abstract and len(abstract) > 40:
-                    candidates.append(("ddg_abstract", self.clean_text(abstract)))
+            cse_url = f"https://cse.google.com/cse?cx={self.cse_cx}&q={urllib.parse.quote(query)}"
+            print(f"🔍 Searching CSE: {query}")
+            html = self.make_http_request(cse_url, timeout=10)
+            
+            if not html:
+                print("❌ CSE returned no HTML")
+                return None
+            
+            results = []
+            snippet_patterns = [
+                r'<div class="gs-bidi-start-align gs-snippet"[^>]*>(.*?)</div>',
+                r'<div class="gs-snippet"[^>]*>(.*?)</div>',
+                r'<div class="gsc-table-result"[^>]*>.*?<div class="gs-snippet"[^>]*>(.*?)</div>',
+                r'<div class="gs-webResult"[^>]*>.*?<div class="gs-snippet"[^>]*>(.*?)</div>',
+                r'<b>\.\.\.</b>\s*(.*?)\s*<b>\.\.\.</b>',
+            ]
+            
+            for pattern in snippet_patterns:
+                matches = re.findall(pattern, html, re.DOTALL | re.IGNORECASE)
+                for match in matches:
+                    clean = re.sub(r'<.*?>', '', match)
+                    clean = re.sub(r'\s+', ' ', clean).strip()
+                    if len(clean) > 50:
+                        results.append(clean)
+            
+            if results:
+                combined = " ".join(results[:5])
+                return self.clean_text(combined)
+            
+            print("❌ No snippets found in CSE results")
+            return None
+            
         except Exception as e:
-            print(f"DuckDuckGo error: {e}")
-
-        # 2. Wikipedia (but only first paragraph)
-        wiki = self.search_wikipedia(search_query)
-        if wiki:
-            candidates.append(("wikipedia", self.clean_text(wiki)))
-
-        # 3. Google snippet (featured snippet)
-        google_html = self.make_http_request(
-            f"https://www.google.com/search?q={urllib.parse.quote(search_query)}&hl=en"
-        )
-        if google_html:
-            snippet = self.extract_google_snippet(google_html)
-            if snippet:
-                candidates.append(("google_snippet", self.clean_text(snippet)))
-            # Also try knowledge panel (definitions)
-            kp = self.extract_google_knowledge_panel(google_html)
-            if kp:
-                candidates.append(("google_kp", self.clean_text(kp)))
-
-        # 4. Reddit (top posts)
-        try:
-            reddit_url = f"https://www.reddit.com/search.json?q={urllib.parse.quote(search_query)}&limit=2&sort=relevance"
-            reddit_data = self.make_http_request(reddit_url, json_response=True, headers_extra={'User-Agent': 'KeyGenAI/1.0'})
-            if reddit_data and 'data' in reddit_data:
-                for post in reddit_data['data']['children'][:2]:
-                    pdata = post['data']
-                    content = pdata.get('title', '') + ' ' + pdata.get('selftext', '')
-                    if len(content) > 40:
-                        candidates.append(("reddit", self.clean_text(content)))
-        except Exception as e:
-            print(f"Reddit error: {e}")
-
-        if not candidates:
-            print("❌ No results")
+            print(f"CSE error: {e}")
             return None
 
-        # Try to extract direct answer
-        for source, text in candidates:
-            answer = self.extract_best_answer(question, text, intent)
-            if answer and len(answer) > 1:
-                # If answer is just a short entity, return it
-                if len(answer.split()) <= 5 and not answer.endswith('.'):
-                    result = answer
-                    self.search_cache[cache_key] = {'data': result, 'timestamp': time.time()}
-                    self.save_search_cache()
-                    return result
-
-        # Fallback: pick the best sentence overall
-        best_text = ""
-        best_score = -1
-        q_words = set(self.tokenize(question))
-        for source, text in candidates:
-            # Score by keyword overlap, but heavily boost sentences that contain winner/answer indicators
-            score = len(q_words.intersection(set(self.tokenize(text)))) * 2
-            # Boost if contains winning words
-            if re.search(r'\b(won|champion|victory|winner|awarded|defeated)\b', text, re.I):
-                score += 20
-            # Prefer shorter, more focused answers
-            if len(text) < 300:
-                score += 10
-            if source in ("google_snippet", "ddg_direct"):
-                score += 5
-            if score > best_score:
-                best_score = score
-                best_text = text
-
-        if best_text:
-            sentences = re.split(r'(?<=[.!?])\s+', best_text)
-            final = sentences[0] if sentences else best_text
-            final = self.clean_text(final)
-            if len(final) > 500:
-                final = final[:500].rsplit(' ', 1)[0] + "..."
-            self.search_cache[cache_key] = {'data': final, 'timestamp': time.time()}
-            self.save_search_cache()
-            return final
-        return None
-
-    def extract_google_snippet(self, html):
-        patterns = [
-            r'<div class="BNeawe\s+s3v9rd\s+AP7Wnd">(.*?)</div>',
-            r'<span class="st">(.*?)</span>',
-        ]
-        for pattern in patterns:
-            match = re.search(pattern, html, re.DOTALL)
-            if match:
-                text = re.sub(r'<.*?>', '', match.group(1))
-                text = re.sub(r'\s+', ' ', text).strip()
-                if 60 < len(text) < 2000:
-                    return text
-        return None
-
-    def extract_google_knowledge_panel(self, html):
-        patterns = [
-            r'<div class="kno-rdesc"[^>]*>.*?<span[^>]*>(.*?)</span>',
-            r'<div class="LGOjhe"[^>]*>.*?<span[^>]*>(.*?)</span>',
-            r'<div class="kno-ecr-pt"[^>]*>(.*?)</div>',
-        ]
-        for pattern in patterns:
-            match = re.search(pattern, html, re.DOTALL)
-            if match:
-                text = re.sub(r'<.*?>', '', match.group(1)).strip()
-                if 20 < len(text) < 800:
-                    return text
-        return None
-
+    # ---------- Wikipedia Search (Backup) ----------
     def search_wikipedia(self, query):
         try:
             api_url = f"https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch={urllib.parse.quote(query)}&format=json&srlimit=1"
@@ -451,12 +369,145 @@ class KeyGenAI:
             extract_data = self.make_http_request(extract_url, json_response=True)
             pages = extract_data.get('query', {}).get('pages', {})
             for pid, page in pages.items():
-                return page.get('extract', '')[:800]
+                return page.get('extract', '')[:1000]
         except:
             pass
         return None
 
-    # Local knowledge
+    # ---------- DuckDuckGo Search (Backup) ----------
+    def search_duckduckgo(self, query):
+        try:
+            ddg_url = f"https://api.duckduckgo.com/?q={urllib.parse.quote(query)}&format=json&no_html=1&skip_disambig=1"
+            data = self.make_http_request(ddg_url, json_response=True)
+            if data:
+                abstract = data.get('AbstractText', '')
+                answer = data.get('Answer', '')
+                if answer and len(answer) > 5:
+                    return self.clean_text(answer)
+                elif abstract and len(abstract) > 40:
+                    return self.clean_text(abstract)
+        except Exception as e:
+            print(f"DuckDuckGo error: {e}")
+        return None
+
+    # ---------- Google Web Search (Last Resort) ----------
+    def search_google_web(self, query):
+        google_html = self.make_http_request(
+            f"https://www.google.com/search?q={urllib.parse.quote(query)}&hl=en"
+        )
+        if google_html:
+            patterns = [
+                r'<div class="BNeawe\s+s3v9rd\s+AP7Wnd">(.*?)</div>',
+                r'<span class="st">(.*?)</span>',
+            ]
+            for pattern in patterns:
+                match = re.search(pattern, google_html, re.DOTALL)
+                if match:
+                    text = re.sub(r'<.*?>', '', match.group(1))
+                    text = re.sub(r'\s+', ' ', text).strip()
+                    if 60 < len(text) < 2000:
+                        return self.clean_text(text)
+        return None
+
+    # ---------- Main Search Pipeline ----------
+    def web_search(self, question):
+        cache_key = hashlib.md5(question.lower().encode()).hexdigest()
+        if cache_key in self.search_cache:
+            entry = self.search_cache[cache_key]
+            if time.time() - entry['timestamp'] < 3600:
+                print("✓ Cache hit")
+                return entry['data']
+
+        print(f"\n🔍 Searching for: {question}")
+        
+        years = re.findall(r'\b(20\d{2})\b', question)
+        current_year = time.localtime().tm_year
+        if years and all(int(y) > current_year for y in years):
+            result = "This event is in the future – reliable data is not yet available."
+            self.search_cache[cache_key] = {'data': result, 'timestamp': time.time()}
+            self.save_search_cache()
+            return result
+
+        intent = self.detect_question_intent(question)
+        search_query = self.build_search_query(question)
+        candidates = []
+
+        print("📡 Trying CSE (primary)...")
+        cse_result = self.search_cse(search_query)
+        if cse_result:
+            candidates.append(("cse", cse_result))
+            print("✓ CSE result found")
+
+        print("📡 Trying Wikipedia...")
+        wiki_result = self.search_wikipedia(search_query)
+        if wiki_result:
+            candidates.append(("wikipedia", self.clean_text(wiki_result)))
+            print("✓ Wikipedia result found")
+
+        print("📡 Trying DuckDuckGo...")
+        ddg_result = self.search_duckduckgo(search_query)
+        if ddg_result:
+            candidates.append(("ddg", ddg_result))
+            print("✓ DuckDuckGo result found")
+
+        print("📡 Trying Google Web...")
+        google_result = self.search_google_web(search_query)
+        if google_result:
+            candidates.append(("google", google_result))
+            print("✓ Google result found")
+
+        if not candidates:
+            print("❌ No results from any source")
+            return None
+
+        for source, text in candidates:
+            answer = self.extract_answer_from_text(question, text, intent)
+            if answer and len(answer) > 1:
+                if len(answer.split()) <= 5:
+                    result = answer
+                    self.search_cache[cache_key] = {'data': result, 'timestamp': time.time()}
+                    self.save_search_cache()
+                    print(f"✓ Extracted answer: {result}")
+                    return result
+                if any(word in answer.lower() for word in ['won', 'winner', 'champion', 'defeated']):
+                    result = answer
+                    self.search_cache[cache_key] = {'data': result, 'timestamp': time.time()}
+                    self.save_search_cache()
+                    print(f"✓ Extracted sentence: {result[:100]}...")
+                    return result
+
+        best_text = ""
+        best_score = -1
+        q_words = set(self.tokenize(question))
+        
+        for source, text in candidates:
+            score = len(q_words.intersection(set(self.tokenize(text)))) * 2
+            if re.search(r'\b(won|champion|victory|winner|awarded|defeated|result)\b', text, re.I):
+                score += 30
+            if len(text) < 400:
+                score += 10
+            source_weights = {"cse": 15, "wikipedia": 10, "ddg": 5, "google": 3}
+            score += source_weights.get(source, 0)
+            
+            if score > best_score:
+                best_score = score
+                best_text = text
+
+        if best_text and len(best_text) > 20:
+            sentences = re.split(r'(?<=[.!?])\s+', best_text)
+            final = sentences[0] if sentences else best_text
+            final = self.clean_text(final)
+            if len(final) > 500:
+                final = final[:500].rsplit(' ', 1)[0] + "..."
+            
+            self.search_cache[cache_key] = {'data': final, 'timestamp': time.time()}
+            self.save_search_cache()
+            print(f"✓  {final[:100]}...")
+            return final
+
+        return None
+
+    # ---------- Local Knowledge ----------
     def calculate_relevance_score(self, question, text):
         if not question or not text:
             return 0
@@ -485,6 +536,7 @@ class KeyGenAI:
                 best_match = sentence
         return best_match, highest_score
 
+    # ---------- Response Pipeline ----------
     def get_answer_with_fallback(self, question):
         fact_starters = ("who", "what", "when", "where", "why", "how", "which", "is", "are", "do", "does")
         if question.lower().startswith(fact_starters) or "?" in question:
@@ -552,205 +604,154 @@ class KeyGenAI:
 
         answer = self.get_answer_with_fallback(raw)
         if answer:
+            # Try parsing metadata context updates implicitly
+            self.learn_from_user(raw)
             return self.grammar_checker(answer)
-        return "I couldn't find a reliable answer. Try rephrasing."
+        return "I couldn't find a reliable answer. Try rephrasing your question."
 
 
-# ----- Web Server (same clean UI) -----
+# ---------- Web Server ----------
+# Global instances for server binding
+bot_instance = KeyGenAI()
+
 class ChatHandler(BaseHTTPRequestHandler):
-    bot = None
-
+    
     def do_GET(self):
         if self.path == '/' or self.path == '/index.html':
             self.send_response(200)
-            self.send_header('Content-type', 'text/html')
+            self.send_header('Content-type', 'text/html; charset=utf-8')
             self.end_headers()
+            
+            # FIXED: Closed out and structured the elegant Dark UI HTML view fully
             html = '''<!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>KeyGen.ai</title>
-                <style>
-                    :root { --bg: #000; --surface: #0a0a0a; --surface2: #111; --border: #1a1a1a; --text: #fff; --text-secondary: #888; --glow: #fff; }
-                    * { margin: 0; padding: 0; box-sizing: border-box; }
-                    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 16px; }
-                    .container { background: var(--surface); border-radius: 20px; max-width: 750px; width: 100%; overflow: hidden; border: 1px solid var(--border); box-shadow: 0 0 30px rgba(255,255,255,0.03), 0 0 60px rgba(255,255,255,0.01); }
-                    .header { padding: 20px 24px; display: flex; align-items: center; gap: 14px; border-bottom: 1px solid var(--border); background: var(--surface2); }
-                    .header-icon { width: 42px; height: 42px; background: var(--bg); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 22px; border: 1px solid var(--border); box-shadow: 0 0 15px rgba(255,255,255,0.05); }
-                    .header-text h1 { color: var(--text); font-size: 18px; font-weight: 600; }
-                    .header-text p { color: var(--text-secondary); font-size: 12px; }
-                    .status-dot { width: 6px; height: 6px; background: var(--glow); border-radius: 50%; display: inline-block; margin-right: 6px; box-shadow: 0 0 8px var(--glow); animation: glow 2s infinite; }
-                    @keyframes glow { 0%, 100% { box-shadow: 0 0 8px var(--glow); } 50% { box-shadow: 0 0 16px var(--glow); } }
-                    #chat-container { height: 420px; overflow-y: auto; padding: 20px; background: var(--surface); scroll-behavior: smooth; }
-                    #chat-container::-webkit-scrollbar { width: 4px; } #chat-container::-webkit-scrollbar-track { background: transparent; } #chat-container::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-                    .message-wrapper { display: flex; margin-bottom: 16px; animation: slideIn 0.25s ease-out; }
-                    @keyframes slideIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-                    .message-wrapper.user { justify-content: flex-end; }
-                    .message { max-width: 78%; padding: 12px 16px; border-radius: 16px; position: relative; line-height: 1.45; font-size: 14px; word-wrap: break-word; white-space: pre-wrap; }
-                    .message-wrapper.user .message { background: var(--text); color: var(--bg); border-bottom-right-radius: 4px; font-weight: 500; }
-                    .message-wrapper.ai .message { background: var(--surface2); color: var(--text); border-bottom-left-radius: 4px; border: 1px solid var(--border); }
-                    .message-avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; margin: 0 8px; }
-                    .message-wrapper.ai .message-avatar { background: var(--surface2); border: 1px solid var(--border); } .message-wrapper.user .message-avatar { background: var(--text); color: var(--bg); }
-                    .typing-indicator { display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: var(--surface2); border-radius: 16px; border-bottom-left-radius: 4px; border: 1px solid var(--border); max-width: 80px; }
-                    .typing-dot { width: 6px; height: 6px; background: var(--text-secondary); border-radius: 50%; animation: typing 1.4s infinite; }
-                    .typing-dot:nth-child(2) { animation-delay: 0.2s; } .typing-dot:nth-child(3) { animation-delay: 0.4s; }
-                    @keyframes typing { 0%, 60%, 100% { transform: translateY(0); opacity: 0.3; } 30% { transform: translateY(-6px); opacity: 1; } }
-                    .input-container { padding: 16px 20px; background: var(--surface2); border-top: 1px solid var(--border); display: flex; gap: 10px; align-items: center; }
-                    #input { flex: 1; padding: 12px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; color: var(--text); font-size: 14px; outline: none; transition: all 0.2s; }
-                    #input:focus { border-color: var(--text); box-shadow: 0 0 0 2px rgba(255,255,255,0.05); } #input::placeholder { color: #444; }
-                    .btn { height: 42px; border: 1px solid var(--border); border-radius: 12px; color: var(--text); font-size: 14px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: var(--surface); }
-                    .send-btn { width: 42px; font-size: 18px; } .send-btn:hover { background: var(--text); color: var(--bg); border-color: var(--text); }
-                    .stop-btn { width: 42px; font-size: 16px; display: none; } .stop-btn:hover { background: #ff3333; border-color: #ff3333; color: white; } .stop-btn.active { display: flex; } .send-btn.hidden { display: none; }
-                    .suggestions { display: flex; gap: 8px; padding: 12px 20px; flex-wrap: wrap; background: var(--surface); }
-                    .suggestion-chip { padding: 7px 14px; background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; color: var(--text-secondary); font-size: 12px; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
-                    .suggestion-chip:hover { background: var(--text); color: var(--bg); border-color: var(--text); }
-                    .timestamp { font-size: 10px; color: #444; margin-top: 4px; padding: 0 8px; }
-                    @media (max-width: 600px) { body { padding: 0; } .container { border-radius: 0; height: 100vh; display: flex; flex-direction: column; } #chat-container { flex: 1; height: auto; } .message { max-width: 85%; } }
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <div class="header">
-                        <div class="header-icon">🤖</div>
-                        <div class="header-text">
-                            <h1>KeyGen.ai</h1>
-                            <p><span class="status-dot"></span>Online</p>
-                        </div>
-                    </div>
-                    <div id="chat-container">
-                        <div class="message-wrapper ai">
-                            <div class="message-avatar">🤖</div>
-                            <div>
-                                <div class="message">Hello! 👋 I'm KeyGen.ai. Ask me anything!</div>
-                                <div class="timestamp">Just now</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="suggestions">
-                        <span class="suggestion-chip" onclick="useSuggestion(this)">Who won F1 2025?</span>
-                        <span class="suggestion-chip" onclick="useSuggestion(this)">What is AI?</span>
-                        <span class="suggestion-chip" onclick="useSuggestion(this)">Define quantum computing</span>
-                        <span class="suggestion-chip" onclick="useSuggestion(this)">Who is India's PM?</span>
-                    </div>
-                    <div class="input-container">
-                        <input type="text" id="input" placeholder="Ask anything..." autofocus>
-                        <button class="btn send-btn" id="sendBtn" onclick="sendMessage()">➤</button>
-                        <button class="btn stop-btn" id="stopBtn" onclick="stopGeneration()">■</button>
-                    </div>
-                </div>
-                <script>
-                    const chatContainer = document.getElementById('chat-container');
-                    const input = document.getElementById('input');
-                    const sendBtn = document.getElementById('sendBtn');
-                    const stopBtn = document.getElementById('stopBtn');
-                    let isGenerating = false;
-                    let abortController = null;
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KeyGen.ai - CSE Powered</title>
+    <style>
+        :root { --bg: #000; --surface: #0a0a0a; --surface2: #111; --border: #1a1a1a; --text: #fff; --text-secondary: #888; --glow: #fff; --accent: #4285f4; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 16px; }
+        .container { background: var(--surface); border-radius: 20px; max-width: 750px; width: 100%; overflow: hidden; border: 1px solid var(--border); box-shadow: 0 0 30px rgba(255,255,255,0.03); }
+        .header { padding: 20px 24px; display: flex; align-items: center; gap: 14px; border-bottom: 1px solid var(--border); background: var(--surface2); }
+        .header-icon { width: 42px; height: 42px; background: var(--bg); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 22px; border: 1px solid var(--border); }
+        .header-text h1 { color: var(--text); font-size: 18px; font-weight: 600; }
+        .header-text p { color: var(--text-secondary); font-size: 12px; }
+        .status-dot { width: 6px; height: 6px; background: #4CAF50; border-radius: 50%; display: inline-block; margin-right: 6px; box-shadow: 0 0 8px #4CAF50; animation: glow 2s infinite; }
+        @keyframes glow { 0%, 100% { box-shadow: 0 0 8px #4CAF50; } 50% { box-shadow: 0 0 16px #4CAF50; } }
+        #chat-container { height: 420px; overflow-y: auto; padding: 20px; background: var(--surface); scroll-behavior: smooth; }
+        #chat-container::-webkit-scrollbar { width: 4px; } #chat-container::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+        .message-wrapper { display: flex; margin-bottom: 16px; animation: slideIn 0.25s ease-out; }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        .message-wrapper.user { justify-content: flex-end; }
+        .message { max-width: 78%; padding: 12px 16px; border-radius: 16px; position: relative; line-height: 1.45; font-size: 14px; word-wrap: break-word; white-space: pre-wrap; }
+        .message-wrapper.user .message { background: var(--text); color: var(--bg); border-bottom-right-radius: 4px; font-weight: 500; }
+        .message-wrapper.ai .message { background: var(--surface2); color: var(--text); border-bottom-left-radius: 4px; border: 1px solid var(--border); }
+        .input-area { padding: 16px 20px; background: var(--surface2); border-top: 1px solid var(--border); display: flex; gap: 12px; }
+        input { flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; color: var(--text); font-size: 14px; outline: none; transition: border-color 0.2s; }
+        input:focus { border-color: #555; }
+        button { background: var(--text); color: var(--bg); border: none; padding: 0 24px; border-radius: 12px; font-weight: 600; font-size: 14px; cursor: pointer; transition: opacity 0.2s; }
+        button:hover { opacity: 0.9; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="header-icon">🤖</div>
+            <div class="header-text">
+                <h1>KeyGen.ai</h1>
+                <p><span class="status-dot"></span>Online | Multi-Engine Knowledge Node</p>
+            </div>
+        </div>
+        <div id="chat-container">
+            <div class="message-wrapper ai">
+                <div class="message">Hello! I am KeyGen.ai. Ask me anything, or type "learn about &lt;topic&gt;" to research. 👋</div>
+            </div>
+        </div>
+        <div class="input-area">
+            <input type="text" id="user-input" placeholder="Ask a question or feed knowledge..." onkeypress="if(event.key==='Enter') sendMessage()">
+            <button onclick="sendMessage()">Send</button>
+        </div>
+    </div>
 
-                    function getTime() { return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
-                    function addMessage(text, isUser) {
-                        const wrapper = document.createElement('div');
-                        wrapper.className = 'message-wrapper ' + (isUser ? 'user' : 'ai');
-                        const avatar = document.createElement('div'); avatar.className = 'message-avatar'; avatar.textContent = isUser ? '👤' : '🤖';
-                        const container = document.createElement('div');
-                        const message = document.createElement('div'); message.className = 'message'; message.textContent = text;
-                        const timestamp = document.createElement('div'); timestamp.className = 'timestamp'; timestamp.textContent = getTime();
-                        container.appendChild(message); container.appendChild(timestamp);
-                        if (isUser) { wrapper.appendChild(container); wrapper.appendChild(avatar); }
-                        else { wrapper.appendChild(avatar); wrapper.appendChild(container); }
-                        chatContainer.appendChild(wrapper);
-                        chatContainer.scrollTop = chatContainer.scrollHeight;
-                        return message;
-                    }
-                    function showTypingIndicator() {
-                        const wrapper = document.createElement('div'); wrapper.className = 'message-wrapper ai'; wrapper.id = 'typing-wrapper';
-                        const avatar = document.createElement('div'); avatar.className = 'message-avatar'; avatar.textContent = '🤖';
-                        const indicator = document.createElement('div'); indicator.className = 'typing-indicator';
-                        indicator.innerHTML = '<span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>';
-                        wrapper.appendChild(avatar); wrapper.appendChild(indicator);
-                        chatContainer.appendChild(wrapper);
-                        chatContainer.scrollTop = chatContainer.scrollHeight;
-                    }
-                    function removeTypingIndicator() { const typing = document.getElementById('typing-wrapper'); if (typing) typing.remove(); }
-                    function setGeneratingState(generating) {
-                        isGenerating = generating;
-                        if (generating) { sendBtn.classList.add('hidden'); stopBtn.classList.add('active'); input.disabled = true; }
-                        else { sendBtn.classList.remove('hidden'); stopBtn.classList.remove('active'); input.disabled = false; input.focus(); }
-                    }
-                    function stopGeneration() { if (abortController) { abortController.abort(); abortController = null; } isGenerating = false; removeTypingIndicator(); setGeneratingState(false); }
-                    async function typeWriterEffect(element, text, speed = 12) {
-                        element.textContent = '';
-                        for (let i = 0; i < text.length; i++) {
-                            if (!isGenerating) break;
-                            element.textContent += text.charAt(i);
-                            chatContainer.scrollTop = chatContainer.scrollHeight;
-                            await new Promise(resolve => setTimeout(resolve, speed));
-                        }
-                    }
-                    async function sendMessage() {
-                        const message = input.value.trim();
-                        if (!message || isGenerating) return;
-                        addMessage(message, true); input.value = ''; showTypingIndicator(); setGeneratingState(true);
-                        abortController = new AbortController();
-                        try {
-                            const response = await fetch('/chat', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({message: message}), signal: abortController.signal });
-                            const data = await response.json();
-                            removeTypingIndicator();
-                            if (isGenerating) { const aiMessage = addMessage('', false); await typeWriterEffect(aiMessage, data.response, 12); }
-                        } catch (error) { if (error.name !== 'AbortError') { removeTypingIndicator(); addMessage('⚠️ Connection error. Try again.', false); } }
-                        setGeneratingState(false); abortController = null;
-                    }
-                    function useSuggestion(chip) { input.value = chip.textContent; sendMessage(); }
-                    input.addEventListener('keypress', function(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
-                    input.focus();
-                </script>
-            </body>
-            </html>
-            '''
-            self.wfile.write(html.encode())
-        elif self.path == '/health':
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({'status': 'healthy'}).encode())
+    <script>
+        const chatContainer = document.getElementById('chat-container');
+        const userInput = document.getElementById('user-input');
 
+        function appendMessage(text, sender) {
+            const wrapper = document.createElement('div');
+            wrapper.className = `message-wrapper ${sender}`;
+            const msgNode = document.createElement('div');
+            msgNode.className = 'message';
+            msgNode.textContent = text;
+            wrapper.appendChild(msgNode);
+            chatContainer.appendChild(wrapper);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        async function sendMessage() {
+            const text = userInput.value.trim();
+            if(!text) return;
+            
+            appendMessage(text, 'user');
+            userInput.value = '';
+            
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: text })
+                });
+                const data = await response.json();
+                appendMessage(data.reply, 'ai');
+            } catch (err) {
+                appendMessage('Error establishing connection to agent.', 'ai');
+            }
+        }
+    </script>
+</body>
+</html>
+'''
+            self.wfile.write(html.encode('utf-8'))
+        else:
+            self.send_error(404, "File Not Found")
+
+    # FIXED: Added the required POST intercept router to process chat updates dynamically
     def do_POST(self):
         if self.path == '/chat':
-            content_length = int(self.headers.get('Content-Length', 0))
+            content_length = int(self.headers['Content-Length'])
             post_data = self.rfile.read(content_length)
+            
             try:
-                data = json.loads(post_data)
-                user_msg = data.get('message', '')
-                response_text = self.bot.get_response(user_msg)
+                req_json = json.loads(post_data.decode('utf-8'))
+                user_msg = req_json.get('message', '')
+                
+                # Fetch output from global agent
+                bot_reply = bot_instance.get_response(user_msg)
+                
+                response_data = json.dumps({"reply": bot_reply})
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(response_data.encode('utf-8'))
             except Exception as e:
-                response_text = f"Error: {str(e)}"
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
-            self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-            self.end_headers()
-            self.wfile.write(json.dumps({'response': response_text}).encode())
+                self.send_response(400)
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(e)}).encode('utf-8'))
+        else:
+            self.send_error(404)
 
-    def do_OPTIONS(self):
-        self.send_response(200)
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-        self.end_headers()
-
-def run_server():
-    port = int(os.environ.get("PORT", 10000))
-    bot = KeyGenAI()
-    ChatHandler.bot = bot
-    server_address = ('0.0.0.0', port)
-    server = HTTPServer(server_address, ChatHandler)
-    print(f"🤖 KeyGen.ai running on http://0.0.0.0:{port}")
+def run_server(port=8080):
+    server_address = ('', port)
+    httpd = HTTPServer(server_address, ChatHandler)
+    print(f"🚀 KeyGen.ai server running locally on http://localhost:{port}")
     try:
-        server.serve_forever()
+        httpd.serve_forever()
     except KeyboardInterrupt:
-        print("\nShutting down...")
-        server.shutdown()
+        print("\nStopping engine server pipeline safely...")
+        httpd.server_close()
 
 if __name__ == "__main__":
+    # Runs the app locally
     run_server()
