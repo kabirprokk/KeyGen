@@ -5,7 +5,6 @@ import os
 import ssl
 import urllib.request
 import urllib.parse
-import urllib.error
 import hashlib
 import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -17,20 +16,19 @@ class KeyGenAI:
         self.knowledge_dir = os.path.join(self.script_dir, knowledge_dir)
         self.data_file = os.path.join(self.script_dir, data_file)
         self.gk_file = os.path.join(self.script_dir, gk_file)
-        
         self.user_mem_file = os.path.join(self.knowledge_dir, "user_mem.txt")
         self.verified_web_file = os.path.join(self.knowledge_dir, "verified_web.txt")
         self.search_cache_file = os.path.join(self.knowledge_dir, "search_cache.json")
-        
         self.raw_data_chunks = []
         self.knowledge_base = []
         self.gk_base = []
         self.search_cache = {}
-        self.stopwords = {"a", "an", "the", "and", "or", "but", "is", "are", "was", "were", 
-                         "to", "at", "by", "for", "of", "with", "in", "on", "that", "this",
-                         "it", "its", "be", "been", "being", "have", "has", "had", "do", "does",
-                         "did", "will", "would", "could", "should", "may", "might", "can", "shall"}
-        
+        self.stopwords = {
+            "a", "an", "the", "and", "or", "but", "is", "are", "was", "were",
+            "to", "at", "by", "for", "of", "with", "in", "on", "that", "this",
+            "it", "its", "be", "been", "being", "have", "has", "had", "do", "does",
+            "did", "will", "would", "could", "should", "may", "might", "can", "shall"
+        }
         self.greetings = {
             "patterns": ["hi", "hello", "hey", "good morning", "good afternoon", "good evening", 
                         "howdy", "greetings", "sup", "what's up", "yo", "hola", "bonjour",
@@ -46,15 +44,14 @@ class KeyGenAI:
                 "Welcome! 🤖 How can I help?"
             ]
         }
-        
         self.ssl_context = ssl.create_default_context()
         self.ssl_context.check_hostname = False
         self.ssl_context.verify_mode = ssl.CERT_NONE
-        
         os.makedirs(self.knowledge_dir, exist_ok=True)
         self.load_all_data()
         self.load_search_cache()
 
+    # ---------- CACHE ----------
     def load_search_cache(self):
         try:
             if os.path.exists(self.search_cache_file):
@@ -73,6 +70,7 @@ class KeyGenAI:
         except:
             pass
 
+    # ---------- TOKENIZATION ----------
     def tokenize(self, text):
         if not text:
             return []
@@ -104,33 +102,15 @@ class KeyGenAI:
         text = re.sub(r'\bi\b(?![\'\.])', 'I', text)
         return text
 
-    def summarize_text(self, text, max_sentences=3):
-        if not text:
-            return text
-        sentences = re.split(r'(?<=[.!?])\s+', text)
-        if len(sentences) <= max_sentences:
-            return text
-        words = self.tokenize(text)
-        keywords = [w for w in words if w not in self.stopwords and len(w) > 3]
-        if not keywords:
-            return ' '.join(sentences[:max_sentences])
-        scored = []
-        for sent in sentences:
-            score = sum(1 for kw in keywords if kw.lower() in sent.lower())
-            scored.append((score, sent))
-        scored.sort(reverse=True, key=lambda x: x[0])
-        top = [s for _, s in scored[:max_sentences]]
-        ordered = [s for s in sentences if s in top]
-        return ' '.join(ordered) if ordered else ' '.join(sentences[:max_sentences])
-
-    def truncate_answer(self, text, max_chars=500):
-        if len(text) <= max_chars:
-            return text
-        truncated = text[:max_chars]
-        last_punct = max(truncated.rfind('.'), truncated.rfind('!'), truncated.rfind('?'))
-        if last_punct > max_chars * 0.5:
-            return truncated[:last_punct + 1]
-        return truncated.rsplit(' ', 1)[0] + "..."
+    # ---------- UTILS ----------
+    def clean_text(self, text):
+        clean = re.sub(r'<.*?>', '', text)
+        noise = ['click here', 'read more', 'cookie', 'privacy policy', 'subscribe', 'advertisement', '©']
+        for n in noise:
+            clean = re.sub(r'(?i)' + re.escape(n), '', clean)
+        clean = re.sub(r'\s+', ' ', clean).strip()
+        clean = re.sub(r'([.!?])\1+', r'\1', clean)
+        return clean
 
     def make_http_request(self, url, timeout=8, json_response=False):
         headers = {
@@ -147,118 +127,105 @@ class KeyGenAI:
             print(f"Request error: {e}")
             return None
 
-    def clean_text(self, text):
-        clean = re.sub(r'<.*?>', '', text)
-        noise = ['click here', 'read more', 'cookie', 'privacy policy', 'subscribe', 'advertisement', '©']
-        for n in noise:
-            clean = re.sub(r'(?i)' + re.escape(n), '', clean)
-        clean = re.sub(r'\s+', ' ', clean).strip()
-        clean = re.sub(r'([.!?])\1+', r'\1', clean)
-        return clean
-
-    def cache_result(self, key, text):
-        self.search_cache[key] = {'data': text, 'timestamp': time.time()}
-        self.save_search_cache()
-
-    def polish_and_save_web_data(self, text):
+    # ---------- ANSWER EXTRACTION ----------
+    def extract_best_sentence(self, question, text):
+        """Return the single sentence that most likely contains the direct answer."""
         if not text:
+            return ""
+        # Split into sentences
+        sentences = re.split(r'(?<=[.!?])\s+', text)
+        if not sentences:
             return text
-        clean = self.clean_text(text)
-        if len(clean) > 50:
-            try:
-                with open(self.verified_web_file, 'a', encoding='utf-8') as f:
-                    f.write(clean + "\n\n")
-                self.raw_data_chunks.append(clean)
-            except:
-                pass
-        return clean
+        q_words = set(self.tokenize(question))
+        best_sent = ""
+        best_score = -1
+        # Prioritise sentences that:
+        # - contain the most question keywords
+        # - start with a capital letter and look like a definition/fact
+        for sent in sentences:
+            sent_clean = sent.strip()
+            if len(sent_clean) < 10:
+                continue
+            t_words = set(self.tokenize(sent_clean))
+            overlap = len(q_words.intersection(t_words))
+            # Bonus for "who" questions: sentence contains a proper name (capital word not at start)
+            if question.lower().startswith("who"):
+                if re.search(r'\b[A-Z][a-z]+\b', sent_clean):
+                    overlap += 3
+            # Penalty for sentences that look like navigation or boilerplate
+            if re.search(r'(click here|read more|privacy|subscribe)', sent_clean, re.I):
+                overlap -= 5
+            if overlap > best_score:
+                best_score = overlap
+                best_sent = sent_clean
+        return best_sent if best_score > 0 else sentences[0].strip()
 
-    # ---------- ENHANCED SEARCH ENGINE ----------
-    def web_search(self, query):
-        """Multi‑source search returning the most accurate snippet, with ranking."""
-        if not query:
-            return None
-
-        cache_key = hashlib.md5(query.lower().encode()).hexdigest()
+    # ---------- WEB SEARCH (ACCURATE) ----------
+    def web_search(self, question):
+        cache_key = hashlib.md5(question.lower().encode()).hexdigest()
         if cache_key in self.search_cache:
             entry = self.search_cache[cache_key]
             if time.time() - entry['timestamp'] < 3600:
-                print("✓ Cache hit")
                 return entry['data']
 
-        print(f"🔍 Searching for: {query}")
-        candidates = []
+        print(f"🔍 Searching: {question}")
 
-        # 1. Wikipedia – most reliable for factual definitions
-        wiki = self.search_wikipedia(query)
-        if wiki:
-            candidates.append(("wikipedia", wiki))
+        # 1. Try DuckDuckGo Instant Answer for direct facts
+        ddg_url = f"https://api.duckduckgo.com/?q={urllib.parse.quote(question)}&format=json&no_html=1&skip_disambig=1"
+        data = self.make_http_request(ddg_url, json_response=True)
+        if data:
+            # Best direct answer: Abstract or Answer field
+            abstract = data.get('AbstractText', '')
+            answer = data.get('Answer', '')
+            if answer and len(answer) > 10:
+                result = self.clean_text(answer)
+                self.search_cache[cache_key] = {'data': result, 'timestamp': time.time()}
+                self.save_search_cache()
+                return result
+            if abstract and len(abstract) > 40:
+                result = self.clean_text(abstract)
+                # Extract the most relevant sentence
+                result = self.extract_best_sentence(question, result)
+                self.search_cache[cache_key] = {'data': result, 'timestamp': time.time()}
+                self.save_search_cache()
+                return result
 
-        # 2. DuckDuckGo Instant Answer (clean JSON)
-        try:
-            ddg_url = f"https://api.duckduckgo.com/?q={urllib.parse.quote(query)}&format=json&no_html=1&skip_disambig=1"
-            data = self.make_http_request(ddg_url, json_response=True)
-            if data:
-                abstract = data.get('AbstractText', '')
-                if abstract and len(abstract) > 50:
-                    candidates.append(("ddg_abstract", abstract))
-                answer = data.get('Answer', '')
-                if answer and len(answer) > 20:
-                    candidates.append(("ddg_answer", answer))
-        except Exception as e:
-            print(f"DuckDuckGo API error: {e}")
-
-        # 3. Google – featured snippet + knowledge panel
+        # 2. Google featured snippet / knowledge panel
         google_html = self.make_http_request(
-            f"https://www.google.com/search?q={urllib.parse.quote(query)}&hl=en"
+            f"https://www.google.com/search?q={urllib.parse.quote(question)}&hl=en"
         )
         if google_html:
             snippet = self.extract_google_snippet(google_html)
             if snippet:
-                candidates.append(("google_snippet", snippet))
-            kp = self.extract_google_knowledge_panel(google_html)
-            if kp:
-                candidates.append(("google_kp", kp))
+                # For who/what questions, try to get the concise answer from knowledge panel
+                if question.lower().startswith(("who", "what")):
+                    kp = self.extract_google_knowledge_panel(google_html)
+                    if kp:
+                        result = self.clean_text(kp)
+                        self.search_cache[cache_key] = {'data': result, 'timestamp': time.time()}
+                        self.save_search_cache()
+                        return result
+                result = self.clean_text(snippet)
+                result = self.extract_best_sentence(question, result)
+                self.search_cache[cache_key] = {'data': result, 'timestamp': time.time()}
+                self.save_search_cache()
+                return result
 
-        # 4. DuckDuckGo HTML snippets
-        ddg_html = self.make_http_request(
-            f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(query)}"
-        )
-        if ddg_html:
-            snippets = re.findall(r'<a class="result__snippet"[^>]*>(.*?)</a>', ddg_html, re.DOTALL)
-            if snippets:
-                text = re.sub(r'<.*?>', '', max(snippets, key=len)).strip()
-                if len(text) > 60:
-                    candidates.append(("ddg_html", text))
+        # 3. Wikipedia
+        wiki = self.search_wikipedia(question)
+        if wiki:
+            result = self.clean_text(wiki)
+            result = self.extract_best_sentence(question, result)
+            self.search_cache[cache_key] = {'data': result, 'timestamp': time.time()}
+            self.save_search_cache()
+            return result
 
-        if not candidates:
-            print("❌ No results")
-            return None
-
-        # Rank candidates: prefer sources that contain question keywords
-        question_words = set(self.tokenize(query))
-        best_source, best_text = max(
-            candidates,
-            key=lambda c: (
-                len(question_words.intersection(set(self.tokenize(c[1])))) * 10
-                + (len(c[1]) > 100) * 5
-                + (c[0] == "wikipedia") * 8
-                + (c[0] == "google_kp") * 7
-                + (c[0] == "ddg_abstract") * 3
-            )
-        )
-        best_text = self.clean_text(best_text)
-        if len(best_text) > 50:
-            self.cache_result(cache_key, best_text)
-            self.polish_and_save_web_data(best_text)
-            return best_text
         return None
 
     def extract_google_snippet(self, html):
-        """Featured snippet or organic result text."""
         patterns = [
-            r'<div class="BNeawe\s+s3v9rd\s+AP7Wnd">(.*?)</div>',  # main snippet
-            r'<span class="st">(.*?)</span>',                      # organic snippet
+            r'<div class="BNeawe\s+s3v9rd\s+AP7Wnd">(.*?)</div>',
+            r'<span class="st">(.*?)</span>',
         ]
         for pattern in patterns:
             match = re.search(pattern, html, re.DOTALL)
@@ -270,25 +237,20 @@ class KeyGenAI:
         return None
 
     def extract_google_knowledge_panel(self, html):
-        """Extract description from knowledge panel (e.g., definitions)."""
-        # Class kno-rdesc contains a span with the description
-        match = re.search(r'<div class="kno-rdesc"[^>]*>.*?<span[^>]*>(.*?)</span>', html, re.DOTALL)
-        if match:
-            text = re.sub(r'<.*?>', '', match.group(1)).strip()
-            if 40 < len(text) < 1000:
-                return text
-        # Alternative: class "LGOjhe"
-        match = re.search(r'<div class="LGOjhe"[^>]*>.*?<span[^>]*>(.*?)</span>', html, re.DOTALL)
-        if match:
-            text = re.sub(r'<.*?>', '', match.group(1)).strip()
-            if 40 < len(text) < 1000:
-                return text
-        # Also try "kno-ecr-pt" (entity description)
-        match = re.search(r'<div class="kno-ecr-pt"[^>]*>(.*?)</div>', html, re.DOTALL)
-        if match:
-            text = re.sub(r'<.*?>', '', match.group(1)).strip()
-            if 40 < len(text) < 1000:
-                return text
+        """Extract a concise definition/description from the knowledge panel."""
+        # Various possible containers
+        patterns = [
+            r'<div class="kno-rdesc"[^>]*>.*?<span[^>]*>(.*?)</span>',
+            r'<div class="LGOjhe"[^>]*>.*?<span[^>]*>(.*?)</span>',
+            r'<div class="kno-ecr-pt"[^>]*>(.*?)</div>',
+            r'<span class="hgKElc"[^>]*>(.*?)</span>',   # definition box
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, html, re.DOTALL)
+            if match:
+                text = re.sub(r'<.*?>', '', match.group(1)).strip()
+                if 20 < len(text) < 800:
+                    return text
         return None
 
     def search_wikipedia(self, query):
@@ -307,7 +269,7 @@ class KeyGenAI:
             pass
         return None
 
-    # ---------- LOCAL KNOWLEDGE (IMPROVED) ----------
+    # ---------- LOCAL KNOWLEDGE (only for general queries) ----------
     def calculate_relevance_score(self, question, text):
         if not question or not text:
             return 0
@@ -315,16 +277,9 @@ class KeyGenAI:
         t_words = set(self.tokenize(text))
         if not q_words:
             return 0
-        # Jaccard similarity
         intersection = len(q_words.intersection(t_words))
         union = len(q_words.union(t_words))
-        jaccard = intersection / union if union > 0 else 0
-        # Bonus if a longer phrase from question appears in text
-        phrase_bonus = 0
-        for phrase in re.findall(r'\b\w+(?:\s+\w+){1,3}\b', question.lower()):
-            if phrase in text.lower():
-                phrase_bonus += 0.1
-        return jaccard + phrase_bonus
+        return intersection / union if union > 0 else 0
 
     def search_local_knowledge(self, query):
         if not query:
@@ -337,35 +292,25 @@ class KeyGenAI:
         highest_score = 0
         for sentence in self.raw_data_chunks:
             score = self.calculate_relevance_score(query, sentence)
-            # Boost sentences that contain more keywords
             score += sum(1 for kw in keywords if kw in sentence.lower()) * 0.05
             if score > highest_score:
                 highest_score = score
                 best_match = sentence
         return best_match, highest_score
 
+    # ---------- RESPONSE PIPELINE ----------
     def get_answer_with_fallback(self, question):
-        if not question:
-            return None
-        # 1. GK Base (fact engine)
-        for fact in self.gk_base:
-            if fact.get("q", "").lower() in question.lower():
-                return fact["a"]
-        # 2. Knowledge modules (JSON)
-        for module in self.knowledge_base:
-            for pattern in module.get("patterns", []):
-                if pattern.lower() in question.lower():
-                    return random.choice(module["responses"])
-        # 3. Local text files (lowered threshold to 0.2)
-        local_result, confidence = self.search_local_knowledge(question)
-        if local_result and confidence > 0.2 and len(local_result) > 50:
-            print(f"✓ Local knowledge match (confidence: {confidence:.2f})")
-            return local_result
-        # 4. Internet search (accurate multi‑source)
-        web_result = self.web_search(question)
-        if web_result:
-            return web_result
-        return None
+        """Always search web for factual questions, fallback to local only for casual chat."""
+        # For fact-seeking questions, skip local knowledge entirely
+        fact_starters = ("who", "what", "when", "where", "why", "how", "which", "is", "are", "do", "does")
+        if question.lower().startswith(fact_starters) or "?" in question:
+            return self.web_search(question)
+
+        # Non‑question: try local first then web
+        local, conf = self.search_local_knowledge(question)
+        if local and conf > 0.3 and len(local) > 80:
+            return local
+        return self.web_search(question)
 
     def learn_from_user(self, text):
         if not text or len(text.split()) < 8 or "?" in text:
@@ -420,35 +365,16 @@ class KeyGenAI:
             topic = raw[12:].strip()
             result = self.web_search(topic)
             if result:
-                summarized = self.summarize_text(result, max_sentences=2)
-                return self.truncate_answer(f"Learned about {topic}: {summarized}", 400)
+                return result
             return f"Couldn't find information about '{topic}'."
 
-        is_question = ("?" in raw or low.startswith(("what", "why", "how", "where", "when", "who",
-                                                       "which", "can", "is", "are", "do", "does",
-                                                       "explain", "tell", "describe", "define")))
-        if is_question:
-            answer = self.get_answer_with_fallback(raw)
-            if answer:
-                # Only summarize if longer than 600 chars, otherwise return as is
-                if len(answer) > 600:
-                    answer = self.summarize_text(answer, max_sentences=3)
-                answer = self.truncate_answer(answer, 500)
-                return self.grammar_checker(answer)
-            return "I couldn't find a reliable answer. Try rephrasing your question."
-
-        # Non‑question – try to give relevant info
-        tokens = self.tokenize(low)
-        keywords = [t for t in tokens if t not in self.stopwords and len(t) > 2]
-        if keywords:
-            local, conf = self.search_local_knowledge(raw)
-            if local and conf > 0.2 and len(local) > 50:
-                return self.truncate_answer(local, 400)
-            web = self.web_search(raw)
-            if web:
-                summarized = self.summarize_text(web, max_sentences=2)
-                return self.truncate_answer(summarized, 400)
-        return "I'm not sure about that. Could you rephrase your question?"
+        answer = self.get_answer_with_fallback(raw)
+        if answer:
+            # Keep answer concise
+            if len(answer) > 600:
+                answer = self.extract_best_sentence(raw, answer)
+            return self.grammar_checker(answer)
+        return "I couldn't find a reliable answer. Try rephrasing."
 
 
 # ---------- WEB SERVER (same clean UI) ----------
@@ -460,8 +386,7 @@ class ChatHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header('Content-type', 'text/html')
             self.end_headers()
-            html = '''
-            <!DOCTYPE html>
+            html = '''<!DOCTYPE html>
             <html lang="en">
             <head>
                 <meta charset="UTF-8">
@@ -477,9 +402,7 @@ class ChatHandler(BaseHTTPRequestHandler):
                         --text-secondary: #888888;
                         --glow: #ffffff;
                     }
-                    * {
-                        margin: 0; padding: 0; box-sizing: border-box;
-                    }
+                    * { margin: 0; padding: 0; box-sizing: border-box; }
                     body {
                         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
                         background: var(--bg);
@@ -521,7 +444,6 @@ class ChatHandler(BaseHTTPRequestHandler):
                         color: var(--text);
                         font-size: 18px;
                         font-weight: 600;
-                        letter-spacing: -0.3px;
                     }
                     .header-text p {
                         color: var(--text-secondary);
@@ -547,16 +469,9 @@ class ChatHandler(BaseHTTPRequestHandler):
                         background: var(--surface);
                         scroll-behavior: smooth;
                     }
-                    #chat-container::-webkit-scrollbar {
-                        width: 4px;
-                    }
-                    #chat-container::-webkit-scrollbar-track {
-                        background: transparent;
-                    }
-                    #chat-container::-webkit-scrollbar-thumb {
-                        background: var(--border);
-                        border-radius: 2px;
-                    }
+                    #chat-container::-webkit-scrollbar { width: 4px; }
+                    #chat-container::-webkit-scrollbar-track { background: transparent; }
+                    #chat-container::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
                     .message-wrapper {
                         display: flex;
                         margin-bottom: 16px;
@@ -566,9 +481,7 @@ class ChatHandler(BaseHTTPRequestHandler):
                         from { opacity: 0; transform: translateY(8px); }
                         to { opacity: 1; transform: translateY(0); }
                     }
-                    .message-wrapper.user {
-                        justify-content: flex-end;
-                    }
+                    .message-wrapper.user { justify-content: flex-end; }
                     .message {
                         max-width: 78%;
                         padding: 12px 16px;
@@ -655,9 +568,7 @@ class ChatHandler(BaseHTTPRequestHandler):
                         border-color: var(--text);
                         box-shadow: 0 0 0 2px rgba(255,255,255,0.05);
                     }
-                    #input::placeholder {
-                        color: #444;
-                    }
+                    #input::placeholder { color: #444; }
                     .btn {
                         height: 42px;
                         border: 1px solid var(--border);
@@ -672,31 +583,16 @@ class ChatHandler(BaseHTTPRequestHandler):
                         flex-shrink: 0;
                         background: var(--surface);
                     }
-                    .send-btn {
-                        width: 42px;
-                        font-size: 18px;
-                    }
+                    .send-btn { width: 42px; font-size: 18px; }
                     .send-btn:hover {
                         background: var(--text);
                         color: var(--bg);
                         border-color: var(--text);
                     }
-                    .stop-btn {
-                        width: 42px;
-                        font-size: 16px;
-                        display: none;
-                    }
-                    .stop-btn:hover {
-                        background: #ff3333;
-                        border-color: #ff3333;
-                        color: white;
-                    }
-                    .stop-btn.active {
-                        display: flex;
-                    }
-                    .send-btn.hidden {
-                        display: none;
-                    }
+                    .stop-btn { width: 42px; font-size: 16px; display: none; }
+                    .stop-btn:hover { background: #ff3333; border-color: #ff3333; color: white; }
+                    .stop-btn.active { display: flex; }
+                    .send-btn.hidden { display: none; }
                     .suggestions {
                         display: flex;
                         gap: 8px;
@@ -720,12 +616,7 @@ class ChatHandler(BaseHTTPRequestHandler):
                         color: var(--bg);
                         border-color: var(--text);
                     }
-                    .timestamp {
-                        font-size: 10px;
-                        color: #444;
-                        margin-top: 4px;
-                        padding: 0 8px;
-                    }
+                    .timestamp { font-size: 10px; color: #444; margin-top: 4px; padding: 0 8px; }
                     @media (max-width: 600px) {
                         body { padding: 0; }
                         .container { border-radius: 0; height: 100vh; display: flex; flex-direction: column; }
@@ -753,10 +644,10 @@ class ChatHandler(BaseHTTPRequestHandler):
                         </div>
                     </div>
                     <div class="suggestions">
+                        <span class="suggestion-chip" onclick="useSuggestion(this)">Who won F1 2025?</span>
                         <span class="suggestion-chip" onclick="useSuggestion(this)">What is AI?</span>
-                        <span class="suggestion-chip" onclick="useSuggestion(this)">How does ML work?</span>
-                        <span class="suggestion-chip" onclick="useSuggestion(this)">Quantum computing</span>
-                        <span class="suggestion-chip" onclick="useSuggestion(this)">What is blockchain?</span>
+                        <span class="suggestion-chip" onclick="useSuggestion(this)">Define quantum computing</span>
+                        <span class="suggestion-chip" onclick="useSuggestion(this)">Who is India's PM?</span>
                     </div>
                     <div class="input-container">
                         <input type="text" id="input" placeholder="Ask anything..." autofocus>
