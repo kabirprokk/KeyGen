@@ -319,9 +319,12 @@ class KeyGenAI:
         return text[:300]
 
     # ---------- Google CSE Search ----------
+       # ---------- Google CSE Search (Fixed) ----------
     def search_cse(self, query):
+        """Search using your Google Custom Search Engine with improved parsing."""
         try:
             cse_url = f"https://cse.google.com/cse?cx={self.cse_cx}&q={urllib.parse.quote(query)}"
+            
             print(f"🔍 Searching CSE: {query}")
             html = self.make_http_request(cse_url, timeout=10)
             
@@ -329,26 +332,64 @@ class KeyGenAI:
                 print("❌ CSE returned no HTML")
                 return None
             
+            # Extract structured results
             results = []
-            snippet_patterns = [
-                r'<div class="gs-bidi-start-align gs-snippet"[^>]*>(.*?)</div>',
-                r'<div class="gs-snippet"[^>]*>(.*?)</div>',
-                r'<div class="gsc-table-result"[^>]*>.*?<div class="gs-snippet"[^>]*>(.*?)</div>',
-                r'<div class="gs-webResult"[^>]*>.*?<div class="gs-snippet"[^>]*>(.*?)</div>',
-                r'<b>\.\.\.</b>\s*(.*?)\s*<b>\.\.\.</b>',
-            ]
             
-            for pattern in snippet_patterns:
-                matches = re.findall(pattern, html, re.DOTALL | re.IGNORECASE)
-                for match in matches:
+            # Pattern 1: Extract complete result blocks (title + snippet)
+            result_blocks = re.findall(
+                r'<div class="gsc-webResult[^"]*".*?</div>\s*</div>\s*</div>',
+                html, re.DOTALL
+            )
+            
+            for block in result_blocks[:5]:  # Top 5 results
+                # Extract title
+                title_match = re.search(r'<a class="gs-title"[^>]*>(.*?)</a>', block, re.DOTALL)
+                title = re.sub(r'<.*?>', '', title_match.group(1)).strip() if title_match else ""
+                
+                # Extract snippet
+                snippet_match = re.search(r'<div class="gs-bidi-start-align gs-snippet"[^>]*>(.*?)</div>', block, re.DOTALL)
+                if not snippet_match:
+                    snippet_match = re.search(r'<div class="gs-snippet"[^>]*>(.*?)</div>', block, re.DOTALL)
+                
+                snippet = re.sub(r'<.*?>', '', snippet_match.group(1)).strip() if snippet_match else ""
+                snippet = re.sub(r'\s+', ' ', snippet)
+                
+                # Extract visible URL
+                url_match = re.search(r'<div class="gs-bidi-start-align gs-visibleUrl[^"]*"[^>]*>(.*?)</div>', block, re.DOTALL)
+                url = re.sub(r'<.*?>', '', url_match.group(1)).strip() if url_match else ""
+                
+                if title or snippet:
+                    results.append({
+                        'title': self.clean_text(title),
+                        'snippet': self.clean_text(snippet),
+                        'url': url
+                    })
+            
+            # Pattern 2: If blocks didn't work, try direct snippet extraction
+            if not results:
+                snippet_matches = re.findall(
+                    r'<div class="gs-bidi-start-align gs-snippet"[^>]*>(.*?)</div>',
+                    html, re.DOTALL
+                )
+                for match in snippet_matches[:5]:
                     clean = re.sub(r'<.*?>', '', match)
                     clean = re.sub(r'\s+', ' ', clean).strip()
                     if len(clean) > 50:
-                        results.append(clean)
+                        results.append({
+                            'title': '',
+                            'snippet': self.clean_text(clean),
+                            'url': ''
+                        })
             
             if results:
-                combined = " ".join(results[:5])
-                return self.clean_text(combined)
+                # Combine titles and snippets for better context
+                combined_texts = []
+                for r in results[:3]:
+                    combined = f"{r['title']}. {r['snippet']}"
+                    combined_texts.append(combined)
+                
+                full_text = " | ".join(combined_texts)
+                return self.clean_text(full_text)
             
             print("❌ No snippets found in CSE results")
             return None
@@ -357,6 +398,168 @@ class KeyGenAI:
             print(f"CSE error: {e}")
             return None
 
+    # ---------- Answer Validation ----------
+    def validate_answer(self, answer, intent, question):
+        """Validate that the extracted answer makes sense for the question type."""
+        if not answer:
+            return False
+        
+        answer_lower = answer.lower()
+        question_lower = question.lower()
+        
+        # Reject if answer is just a year for "who" questions
+        if intent == "person" and re.match(r'^\d{4}$', answer.strip()):
+            return False
+        
+        # Reject if answer is "La Liga", "Premier League" etc for "club" questions
+        if "club" in question_lower and answer_lower in {"la liga", "premier league", "serie a", "bundesliga", "ligue 1", "mls"}:
+            return False
+        
+        # Reject if answer is too short for complex questions
+        if len(answer.split()) <= 1 and len(question.split()) > 8:
+            # Single word answers are suspicious for long questions
+            if intent in ("person", "team_or_person") and not any(c.isupper() for c in answer):
+                return False
+        
+        # Reject generic/definition answers for specific questions
+        generic_starts = [
+            "the world records", "a list of", "this is a", "refers to",
+            "is a term", "is defined", "the history of", "according to"
+        ]
+        if any(answer_lower.startswith(gs) for gs in generic_starts):
+            return False
+        
+        # Reject if answer is just repeating the question
+        question_words = set(self.tokenize(question_lower))
+        answer_words = set(self.tokenize(answer_lower))
+        if len(answer_words) <= 3 and answer_words.issubset(question_words):
+            return False
+        
+        return True
+
+    # ---------- Improved Answer Extraction ----------
+    def extract_answer_from_text(self, question, text, intent):
+        """Extract the most direct answer from text based on intent."""
+        if not text:
+            return None
+        
+        text = self.clean_text(text)
+        candidates = []
+        
+        # Strategy 1: Look for question-relevant keywords first
+        q_lower = question.lower()
+        
+        # For "which club" questions - look for club names
+        if "club" in q_lower or "team" in q_lower:
+            club_patterns = [
+                r'([A-Z][a-zA-Z]+(?:\s+(?:United|City|Town|Rovers|Rangers|Athletic|Albion|Villa|Forest|Palace|Hotspur|Wednesday|County|Wanderers|Alexandra|Stanley|Orient|Argyle))(?:\s+FC)?)',
+                r'([A-Z][a-zA-Z]+(?:\s+FC|\s+Football Club))',
+                r'(?:defeated|beat|won against)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*)',
+                r'([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*)\s+(?:won|claimed|secured|lifted|took)\s+the',
+                r'(?:winner|champion|victory for|trophy to)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*)',
+            ]
+            for pattern in club_patterns:
+                match = re.search(pattern, text)
+                if match:
+                    club = match.group(1).strip()
+                    if len(club) > 3 and club.lower() not in {'the', 'and', 'for', 'was', 'has', 'their', 'this', 'that', 'with', 'from'}:
+                        candidates.append(("club_pattern", club))
+        
+        # For "who" questions about people
+        if intent == "person":
+            person_patterns = [
+                r'([A-Z][a-z]+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+(?:won|claimed|secured|became|crowned|named|selected|elected)',
+                r'(?:won by|awarded to|title to|champion[:\s]+|winner[:\s]+)\s*([A-Z][a-z]+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)',
+                r'([A-Z][a-z]+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+(?:is|was|became)\s+(?:the\s+)?(?:champion|winner|victor)',
+            ]
+            for pattern in person_patterns:
+                match = re.search(pattern, text)
+                if match:
+                    person = match.group(1).strip()
+                    if len(person) > 5 and person.lower() not in {'the world', 'the international', 'the united'}:
+                        candidates.append(("person_pattern", person))
+        
+        # General winner extraction
+        winner = self.extract_winner(text)
+        if winner:
+            candidates.append(("winner", winner))
+        
+        # Country extraction
+        if intent == "country":
+            country = self.extract_country(text)
+            if country:
+                candidates.append(("country", country))
+        
+        # Disease extraction
+        if intent == "disease":
+            disease = self.extract_disease_name(text)
+            if disease:
+                candidates.append(("disease", disease))
+        
+        # Date extraction
+        if intent == "date":
+            date = self.extract_date(text)
+            if date:
+                candidates.append(("date", date))
+        
+        # Place extraction
+        if intent == "place":
+            place = self.extract_place(text)
+            if place:
+                candidates.append(("place", place))
+        
+        # Validate candidates
+        valid_candidates = []
+        for source, candidate in candidates:
+            if self.validate_answer(candidate, intent, question):
+                valid_candidates.append((source, candidate))
+        
+        if valid_candidates:
+            # Return the first valid candidate
+            return valid_candidates[0][1]
+        
+        # Strategy 2: Look for answer-indicator sentences
+        indicator_words = ['won', 'winner', 'champion', 'victory', 'defeated', 'announced', 
+                          'declared', 'confirmed', 'result', 'crowned', 'lifted', 'secured',
+                          'triumphed', 'emerged', 'claimed', 'captured']
+        
+        sentences = re.split(r'(?<=[.!?])\s+', text)
+        
+        scored_sentences = []
+        for sent in sentences:
+            sent_clean = sent.strip()
+            if len(sent_clean) < 15:
+                continue
+            
+            score = sum(1 for word in indicator_words if word in sent_clean.lower())
+            # Bonus for containing capitalized words (likely entities)
+            score += len(re.findall(r'\b[A-Z][a-z]+\b', sent_clean)) * 2
+            # Penalty for definition-like sentences
+            if re.search(r'\b(is a|refers to|defined as|means|known as)\b', sent_clean, re.I):
+                score -= 3
+            
+            if score > 0:
+                scored_sentences.append((score, sent_clean))
+        
+        if scored_sentences:
+            scored_sentences.sort(reverse=True, key=lambda x: x[0])
+            best_sent = scored_sentences[0][1]
+            
+            # Try to extract entity from best sentence
+            for extractor in [self.extract_winner, self.extract_country, self.extract_disease_name]:
+                result = extractor(best_sent)
+                if result and self.validate_answer(result, intent, question):
+                    return result
+            
+            return best_sent
+        
+        # Strategy 3: Return first meaningful sentence
+        for sent in sentences:
+            if len(sent) > 30 and not any(word in sent.lower() for word in ['cookie', 'privacy', 'subscribe']):
+                return sent.strip()
+        
+        return text[:300]
+        
     # ---------- Wikipedia Search (Backup) ----------
     def search_wikipedia(self, query):
         try:
