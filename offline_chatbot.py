@@ -749,6 +749,22 @@ class ChatHandler(BaseHTTPRequestHandler):
                 'github_enabled': self.bot.web_handler.use_github,
                 'collection_counter': stats.get('counter', 0)
             }).encode())
+
+        elif self.path == '/debug':
+    self.send_response(200)
+    self.send_header('Content-type', 'text/plain')
+    self.end_headers()
+    
+    token = os.environ.get("GITHUB_TOKEN", "NOT SET")
+    repo = os.environ.get("GITHUB_REPO", "NOT SET")
+    
+    debug_info = f"""
+GITHUB_TOKEN: {'✅ SET' if token != 'NOT SET' else '❌ NOT SET'}
+GITHUB_REPO: {repo}
+Token first 10 chars: {token[:10] if token != 'NOT SET' else 'N/A'}
+Use GitHub: {self.bot.web_handler.use_github}
+    """
+    self.wfile.write(debug_info.encode())
                 
         elif self.path == '/health':
             self.send_response(200)
