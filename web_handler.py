@@ -1,7 +1,7 @@
 """
 Web Search Handler for KeyGen.ai
 Handles all external web searches with multiple fallback engines.
-Includes automatic data collection, cleaning, and deduplication.
+Includes automatic data collection, cleaning, deduplication, and GitHub storage.
 """
 
 import re
@@ -16,6 +16,7 @@ import os
 import threading
 from collections import defaultdict
 from datetime import datetime
+from github_storage import GitHubStorage
 
 class WebSearchHandler:
     """Handles all web search operations with caching and fallback engines."""
@@ -30,17 +31,42 @@ class WebSearchHandler:
         self.is_collecting = False
         self.collection_thread = None
         self.collection_topics = [
-            "artificial intelligence latest developments",
-            "machine learning breakthroughs",
+            "artificial intelligence latest developments 2025",
+            "machine learning breakthroughs 2025",
             "technology news today",
-            "science discoveries",
-            "world news headlines",
-            "sports results",
-            "health medical advances",
-            "space exploration updates",
-            "climate change news",
-            "economic updates"
+            "science discoveries 2025",
+            "world news headlines 2025",
+            "sports results 2025",
+            "health medical advances 2025",
+            "space exploration updates 2025",
+            "climate change news 2025",
+            "economic updates 2025"
         ]
+        
+        # GitHub storage
+        self.github_token = os.environ.get("GITHUB_TOKEN")
+        self.github_repo = os.environ.get("GITHUB_REPO", "")
+        
+        if self.github_token and self.github_repo:
+            try:
+                repo_parts = self.github_repo.split("/")
+                if len(repo_parts) == 2:
+                    self.github = GitHubStorage(
+                        token=self.github_token,
+                        repo_owner=repo_parts[0],
+                        repo_name=repo_parts[1]
+                    )
+                    self.use_github = True
+                    print("✓ GitHub storage enabled")
+                else:
+                    print("⚠ Invalid GITHUB_REPO format. Use: username/repo")
+                    self.use_github = False
+            except Exception as e:
+                print(f"⚠ GitHub storage init error: {e}")
+                self.use_github = False
+        else:
+            self.use_github = False
+            print("ℹ GitHub storage not configured (set GITHUB_TOKEN and GITHUB_REPO env vars)")
         
         # SSL context for HTTPS requests
         self.ssl_context = ssl.create_default_context()
@@ -166,37 +192,66 @@ class WebSearchHandler:
     def load_collected_hashes(self):
         """Load hashes of previously collected data."""
         try:
+            # Try local file first
             hash_file = f"{self.collected_dir}/collected_hashes.json"
             if os.path.exists(hash_file):
                 with open(hash_file, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                     self.collected_hashes = set(data.get('hashes', []))
-                print(f"✓ Loaded {len(self.collected_hashes)} collected data hashes")
+                print(f"✓ Loaded {len(self.collected_hashes)} local hashes")
+            
+            # Try GitHub if available
+            elif self.use_github:
+                content = self.github.load_file("knowledge/collected/collected_hashes.json")
+                if content:
+                    data = json.loads(content)
+                    self.collected_hashes = set(data.get('hashes', []))
+                    print(f"✓ Loaded {len(self.collected_hashes)} GitHub hashes")
+                    
         except Exception as e:
             print(f"Hash load error: {e}")
             self.collected_hashes = set()
     
     def save_collected_hashes(self):
-        """Save hashes of collected data."""
+        """Save hashes of collected data to local and GitHub."""
+        hashes_data = {
+            'hashes': list(self.collected_hashes),
+            'last_updated': datetime.now().isoformat()
+        }
+        
+        # Save locally
         try:
             hash_file = f"{self.collected_dir}/collected_hashes.json"
             with open(hash_file, 'w', encoding='utf-8') as f:
-                json.dump({
-                    'hashes': list(self.collected_hashes),
-                    'last_updated': datetime.now().isoformat()
-                }, f, indent=2)
+                json.dump(hashes_data, f, indent=2)
+            print("✓ Hashes saved locally")
         except Exception as e:
-            print(f"Hash save error: {e}")
+            print(f"Local hash save error: {e}")
+        
+        # Save to GitHub
+        if self.use_github:
+            try:
+                self.github.save_file(
+                    filepath="knowledge/collected/collected_hashes.json",
+                    content=json.dumps(hashes_data, indent=2),
+                    commit_message="🔄 Update collected hashes"
+                )
+                print("✓ Hashes saved to GitHub")
+            except Exception as e:
+                print(f"GitHub hash save error: {e}")
     
     def find_latest_counter(self):
         """Find the latest collection counter number."""
         try:
-            existing_files = os.listdir(self.collected_dir)
             counters = []
-            for filename in existing_files:
-                match = re.match(r'collected_data_(\d+)\.txt', filename)
-                if match:
-                    counters.append(int(match.group(1)))
+            
+            # Check local files
+            if os.path.exists(self.collected_dir):
+                for filename in os.listdir(self.collected_dir):
+                    match = re.match(r'collected_data_(\d+)\.txt', filename)
+                    if match:
+                        counters.append(int(match.group(1)))
+            
             self.collection_counter = max(counters) if counters else 0
             print(f"✓ Collection counter starting at: {self.collection_counter}")
         except Exception as e:
@@ -206,7 +261,32 @@ class WebSearchHandler:
     def get_next_filename(self):
         """Get the next available collection filename."""
         self.collection_counter += 1
-        return f"{self.collected_dir}/collected_data_{self.collection_counter}.txt"
+        return f"collected_data_{self.collection_counter}.txt"
+    
+    def _format_collected_data(self, entries):
+        """Format collected data entries into a readable text file."""
+        lines = []
+        lines.append("=" * 60)
+        lines.append("KEYGEN.AI AUTO-COLLECTED KNOWLEDGE")
+        lines.append("=" * 60)
+        lines.append(f"Collection Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        lines.append(f"Total Entries: {len(entries)}")
+        lines.append(f"Collection Cycle: #{self.collection_counter}")
+        lines.append("=" * 60)
+        lines.append("")
+        
+        for i, entry in enumerate(entries, 1):
+            lines.append(f"[ENTRY {i}]")
+            lines.append(f"Topic: {entry.get('topic', 'Unknown')}")
+            lines.append(f"Source: {entry.get('source', 'Unknown')}")
+            lines.append(f"Timestamp: {entry.get('timestamp', '')}")
+            lines.append("-" * 40)
+            lines.append(entry.get('text', ''))
+            lines.append("")
+            lines.append("=" * 60)
+            lines.append("")
+        
+        return "\n".join(lines)
     
     # ========== DATA CLEANING ==========
     
@@ -249,8 +329,8 @@ class WebSearchHandler:
             r'(?i)ad Choices',
             r'(?i)powered by',
             r'(?i)copyright \d{4}',
-            r'\[\d+\]',  # Citation brackets
-            r'\[\w+\]',  # Wiki-style citations
+            r'\[\d+\]',
+            r'\[\w+\]',
         ]
         
         for pattern in noise_patterns:
@@ -281,12 +361,10 @@ class WebSearchHandler:
         if not sentence:
             return ""
         
-        # Capitalize first letter
         sentence = sentence.strip()
         if len(sentence) > 1:
             sentence = sentence[0].upper() + sentence[1:]
         
-        # Ensure proper ending
         if sentence[-1] not in '.!?"\'':
             sentence += '.'
         
@@ -297,10 +375,8 @@ class WebSearchHandler:
         if not text:
             return []
         
-        # Split on sentence boundaries
         sentences = re.split(r'(?<=[.!?])\s+', text)
         
-        # Clean each sentence
         cleaned = []
         for sent in sentences:
             sent = self.clean_sentence(sent.strip())
@@ -319,42 +395,33 @@ class WebSearchHandler:
         if len(sentences) <= max_sentences:
             return sentences
         
-        # Score sentences by information density
         scored = []
         for sent in sentences:
             score = 0
             words = sent.split()
             
-            # Longer sentences often have more info
             if len(words) > 8:
                 score += 2
             if len(words) > 15:
                 score += 3
             
-            # Sentences with numbers/statistics
             if re.search(r'\d+', sent):
                 score += 3
             
-            # Sentences with proper nouns
             if re.search(r'[A-Z][a-z]+\s+[A-Z][a-z]+', sent):
                 score += 3
             
-            # Sentences with factual indicators
             factual_words = ['is', 'are', 'was', 'were', 'has', 'have', 'according', 'research', 
                            'study', 'found', 'discovered', 'announced', 'reported', 'confirmed']
             score += sum(1 for w in factual_words if w in sent.lower()) * 2
             
-            # Penalize question sentences
             if sent.endswith('?'):
                 score -= 5
             
             scored.append((score, sent))
         
-        # Sort by score and take top sentences
         scored.sort(reverse=True, key=lambda x: x[0])
         top_sentences = [s[1] for s in scored[:max_sentences]]
-        
-        # Sort back to original order
         ordered = [s for s in sentences if s in top_sentences]
         
         return ordered
@@ -363,12 +430,9 @@ class WebSearchHandler:
     
     def get_text_hash(self, text):
         """Generate a hash for text deduplication."""
-        # Normalize text
         normalized = text.lower().strip()
         normalized = re.sub(r'\s+', ' ', normalized)
         normalized = re.sub(r'[^\w\s]', '', normalized)
-        
-        # Use first 200 chars for hash
         sample = normalized[:200]
         return hashlib.md5(sample.encode()).hexdigest()
     
@@ -389,11 +453,9 @@ class WebSearchHandler:
         """Check if text is a duplicate of any existing text."""
         text_hash = self.get_text_hash(text)
         
-        # Check hash first
         if text_hash in self.collected_hashes:
             return True
         
-        # Check similarity with existing texts
         sentences = self.split_into_sentences(text)
         for existing in existing_texts:
             existing_sentences = self.split_into_sentences(existing)
@@ -404,30 +466,6 @@ class WebSearchHandler:
         
         return False
     
-    def remove_duplicates_from_text(self, text, existing_texts):
-        """Remove duplicate sentences from text."""
-        sentences = self.split_into_sentences(text)
-        unique_sentences = []
-        
-        for sent in sentences:
-            is_dup = False
-            for existing in existing_texts:
-                existing_sentences = self.split_into_sentences(existing)
-                for exist_sent in existing_sentences:
-                    if self.get_sentence_similarity(sent, exist_sent) > 0.6:
-                        is_dup = True
-                        break
-                if is_dup:
-                    break
-            
-            if not is_dup:
-                sent_hash = self.get_text_hash(sent)
-                if sent_hash not in self.collected_hashes:
-                    unique_sentences.append(sent)
-                    self.collected_hashes.add(sent_hash)
-        
-        return ' '.join(unique_sentences)
-    
     # ========== KNOWLEDGE FOLDER CHECK ==========
     
     def get_existing_knowledge(self):
@@ -435,7 +473,6 @@ class WebSearchHandler:
         existing_texts = []
         
         try:
-            # Check knowledge directory
             if os.path.exists(self.cache_dir):
                 for filename in os.listdir(self.cache_dir):
                     if filename.endswith('.txt') and filename != 'web_search_cache.json':
@@ -448,7 +485,6 @@ class WebSearchHandler:
                         except:
                             pass
             
-            # Check collected directory
             if os.path.exists(self.collected_dir):
                 for filename in os.listdir(self.collected_dir):
                     if filename.endswith('.txt'):
@@ -501,7 +537,6 @@ class WebSearchHandler:
     # ========== PARSERS ==========
     
     def _parse_duckduckgo_api(self, data):
-        """Parse DuckDuckGo API JSON response."""
         if not data:
             return []
         
@@ -537,7 +572,6 @@ class WebSearchHandler:
         return results
     
     def _parse_duckduckgo_html(self, html):
-        """Parse DuckDuckGo HTML search results."""
         if not html:
             return []
         
@@ -562,7 +596,6 @@ class WebSearchHandler:
         return results
     
     def _parse_google(self, html):
-        """Parse Google search results."""
         if not html:
             return []
         
@@ -614,7 +647,6 @@ class WebSearchHandler:
         return results
     
     def _parse_wikipedia(self, data):
-        """Parse Wikipedia API response."""
         if not data or 'query' not in data:
             return []
         
@@ -638,7 +670,6 @@ class WebSearchHandler:
         return results
     
     def _parse_bing(self, html):
-        """Parse Bing search results."""
         if not html:
             return []
         
@@ -662,7 +693,6 @@ class WebSearchHandler:
         return results
     
     def _parse_generic_html(self, html):
-        """Generic HTML parser for fallback engines."""
         if not html:
             return []
         
@@ -682,7 +712,6 @@ class WebSearchHandler:
     # ========== WIKIPEDIA DEEP SEARCH ==========
     
     def get_wikipedia_extract(self, page_id):
-        """Get the full intro extract from a Wikipedia page."""
         try:
             url = f"https://en.wikipedia.org/w/api.php?action=query&prop=extracts&exintro=1&explaintext=1&pageids={page_id}&format=json"
             data = self.make_request(url, json_response=True, timeout=10)
@@ -694,7 +723,7 @@ class WebSearchHandler:
                     if extract and len(extract) > 100:
                         if len(extract) > 2000:
                             extract = extract[:2000].rsplit('.', 1)[0] + '.'
-                        return extract
+                        return self.clean_text(extract)
         except Exception as e:
             print(f"  Wikipedia extract error: {e}")
         
@@ -703,7 +732,6 @@ class WebSearchHandler:
     # ========== WEBSITE SCRAPING ==========
     
     def scrape_website(self, url, timeout=15):
-        """Scrape content from a website URL."""
         print(f"  🌐 Scraping: {url[:80]}...")
         
         try:
@@ -711,7 +739,6 @@ class WebSearchHandler:
             if not html:
                 return None
             
-            # Extract main content
             content = self._extract_main_content(html)
             
             if content and len(content) > 100:
@@ -724,18 +751,15 @@ class WebSearchHandler:
             return None
     
     def _extract_main_content(self, html):
-        """Extract main content from HTML."""
         if not html:
             return ""
         
-        # Remove scripts, styles, nav, footer
         html = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.DOTALL | re.IGNORECASE)
         html = re.sub(r'<style[^>]*>.*?</style>', '', html, flags=re.DOTALL | re.IGNORECASE)
         html = re.sub(r'<nav[^>]*>.*?</nav>', '', html, flags=re.DOTALL | re.IGNORECASE)
         html = re.sub(r'<footer[^>]*>.*?</footer>', '', html, flags=re.DOTALL | re.IGNORECASE)
         html = re.sub(r'<header[^>]*>.*?</header>', '', html, flags=re.DOTALL | re.IGNORECASE)
         
-        # Look for main content areas
         content_patterns = [
             r'<article[^>]*>(.*?)</article>',
             r'<main[^>]*>(.*?)</main>',
@@ -752,14 +776,12 @@ class WebSearchHandler:
                 if len(content) > 200:
                     return self.clean_text(content)
         
-        # Fallback: extract all paragraphs
         paragraphs = re.findall(r'<p[^>]*>(.*?)</p>', html, re.DOTALL | re.IGNORECASE)
         if paragraphs:
             content = ' '.join(paragraphs)
             if len(content) > 200:
                 return self.clean_text(content)
         
-        # Last resort: get body text
         body_match = re.search(r'<body[^>]*>(.*?)</body>', html, re.DOTALL | re.IGNORECASE)
         if body_match:
             return self.clean_text(body_match.group(1))
@@ -769,7 +791,6 @@ class WebSearchHandler:
     # ========== MAIN SEARCH FUNCTIONS ==========
     
     def search(self, query, max_results=5, use_cache=True):
-        """Main search function that tries multiple engines."""
         if not query or not query.strip():
             return []
         
@@ -809,7 +830,6 @@ class WebSearchHandler:
                 print(f"  ✗ {engine_name}: {e}")
                 continue
         
-        # Remove duplicates
         seen = set()
         unique_results = []
         for result in all_results:
@@ -826,7 +846,6 @@ class WebSearchHandler:
         return unique_results
     
     def search_single_answer(self, query):
-        """Search for a single best answer."""
         results = self.search(query, max_results=3)
         
         if not results:
@@ -857,8 +876,7 @@ class WebSearchHandler:
     def collect_data_auto(self):
         """
         Automatically collect data from web searches.
-        Cleans, deduplicates, and saves new unique content.
-        Runs every 2.5 minutes.
+        Cleans, deduplicates, and saves new unique content to local and GitHub.
         """
         if self.is_collecting:
             print("⚠ Already collecting data...")
@@ -869,19 +887,16 @@ class WebSearchHandler:
         print(f"📥 AUTO DATA COLLECTION STARTED - {datetime.now().strftime('%H:%M:%S')}")
         print(f"{'='*60}")
         
+        all_new_content = []
+        
         try:
-            # Get existing knowledge for deduplication
             existing_texts = self.get_existing_knowledge()
             print(f"📚 Existing knowledge: {len(existing_texts)} files loaded")
             
-            all_new_content = []
-            
-            # Search and scrape for each topic
             for i, topic in enumerate(self.collection_topics, 1):
                 print(f"\n📌 Topic {i}/{len(self.collection_topics)}: {topic}")
                 
                 try:
-                    # Search for the topic
                     results = self.search(topic, max_results=3, use_cache=False)
                     
                     if not results:
@@ -893,11 +908,9 @@ class WebSearchHandler:
                             text = result.get('text', '')
                             
                             if text and len(text) > 50:
-                                # Get key sentences
                                 key_sentences = self.extract_key_sentences(text, max_sentences=5)
                                 combined = ' '.join(key_sentences)
                                 
-                                # Check for duplicates
                                 if not self.is_duplicate(combined, existing_texts):
                                     all_new_content.append({
                                         'topic': topic,
@@ -910,10 +923,8 @@ class WebSearchHandler:
                                 else:
                                     print(f"  - Duplicate content skipped")
                     
-                    # Also try to scrape URLs from results
                     if results:
                         for result in results[:2]:
-                            # Try to get Wikipedia extracts
                             if result.get('type') == 'wikipedia' and result.get('pageid'):
                                 extract = self.get_wikipedia_extract(result['pageid'])
                                 if extract:
@@ -933,39 +944,44 @@ class WebSearchHandler:
                     print(f"  ✗ Error on topic '{topic}': {e}")
                     continue
                 
-                # Small delay between topics
                 time.sleep(1)
             
             # Save all new content
             if all_new_content:
                 filename = self.get_next_filename()
-                print(f"\n💾 Saving {len(all_new_content)} new entries to: {filename}")
+                filepath = f"{self.collected_dir}/{filename}"
+                content = self._format_collected_data(all_new_content)
                 
+                # Save locally
                 try:
-                    with open(filename, 'w', encoding='utf-8') as f:
-                        f.write(f"=== Auto-Collected Data ===\n")
-                        f.write(f"Collection Date: {datetime.now().isoformat()}\n")
-                        f.write(f"Total Entries: {len(all_new_content)}\n")
-                        f.write(f"{'='*50}\n\n")
-                        
-                        for i, entry in enumerate(all_new_content, 1):
-                            f.write(f"[{i}] Topic: {entry['topic']}\n")
-                            f.write(f"Source: {entry['source']}\n")
-                            f.write(f"Content: {entry['text']}\n")
-                            f.write(f"{'-'*50}\n\n")
-                    
-                    # Save updated hashes
-                    for entry in all_new_content:
-                        sentences = self.split_into_sentences(entry['text'])
-                        for sent in sentences:
-                            sent_hash = self.get_text_hash(sent)
-                            self.collected_hashes.add(sent_hash)
-                    
-                    self.save_collected_hashes()
-                    print(f"✅ Successfully saved {len(all_new_content)} entries")
-                    
+                    with open(filepath, 'w', encoding='utf-8') as f:
+                        f.write(content)
+                    print(f"\n💾 Saved locally: {filepath}")
                 except Exception as e:
-                    print(f"❌ Error saving file: {e}")
+                    print(f"❌ Local save error: {e}")
+                
+                # Save to GitHub
+                if self.use_github:
+                    try:
+                        github_path = f"knowledge/collected/{filename}"
+                        self.github.save_file(
+                            filepath=github_path,
+                            content=content,
+                            commit_message=f"📥 Auto-collected data #{self.collection_counter} [{datetime.now().strftime('%Y-%m-%d %H:%M')}]"
+                        )
+                        print(f"💾 Saved to GitHub: {github_path}")
+                    except Exception as e:
+                        print(f"❌ GitHub save error: {e}")
+                
+                # Update hashes
+                for entry in all_new_content:
+                    sentences = self.split_into_sentences(entry['text'])
+                    for sent in sentences:
+                        sent_hash = self.get_text_hash(sent)
+                        self.collected_hashes.add(sent_hash)
+                
+                self.save_collected_hashes()
+                print(f"✅ Successfully saved {len(all_new_content)} entries")
             else:
                 print(f"\n📭 No new unique content found in this cycle")
         
@@ -980,23 +996,19 @@ class WebSearchHandler:
             print(f"{'='*60}\n")
     
     def _search_with_fallbacks(self, query):
-        """Search using fallback engines when main engines fail."""
         results = []
-        
         for engine_name, engine in self.fallback_engines.items():
             try:
                 url = engine['url'].format(query=urllib.parse.quote(query))
                 response = self.make_request(url, timeout=engine['timeout'])
-                
                 if response:
                     parser = engine['parser']
                     engine_results = parser(response)
                     if engine_results:
                         results.extend(engine_results)
                         break
-            except Exception as e:
+            except:
                 continue
-        
         return results
     
     # ========== BACKGROUND COLLECTION THREAD ==========
@@ -1011,15 +1023,12 @@ class WebSearchHandler:
         self._run_collection_loop()
     
     def _run_collection_loop(self):
-        """Run the collection loop in a thread."""
         def loop():
             while True:
                 try:
                     self.collect_data_auto()
                 except Exception as e:
                     print(f"❌ Collection loop error: {e}")
-                
-                # Wait 2.5 minutes (150 seconds)
                 print(f"⏰ Next collection in 2.5 minutes...")
                 time.sleep(150)
         
@@ -1032,13 +1041,11 @@ class WebSearchHandler:
         print("🛑 Auto collection stopped")
     
     def set_collection_topics(self, topics):
-        """Set custom topics for data collection."""
         if isinstance(topics, list):
             self.collection_topics = topics
             print(f"✓ Collection topics updated: {len(topics)} topics")
     
     def add_collection_topic(self, topic):
-        """Add a single topic to collection list."""
         if topic not in self.collection_topics:
             self.collection_topics.append(topic)
             print(f"✓ Topic added: {topic}")
@@ -1046,42 +1053,34 @@ class WebSearchHandler:
     # ========== UTILITY FUNCTIONS ==========
     
     def clear_cache(self):
-        """Clear all cached searches."""
         self.search_cache = {}
         self.save_cache()
         print("✓ Cache cleared")
     
     def get_cache_stats(self):
-        """Get cache statistics."""
         total = len(self.search_cache)
         sources = defaultdict(int)
         for key, entry in self.search_cache.items():
             sources[entry.get('source', 'unknown')] += 1
-        
-        return {
-            'total_entries': total,
-            'sources': dict(sources)
-        }
+        return {'total_entries': total, 'sources': dict(sources)}
     
     def get_collection_stats(self):
-        """Get collection statistics."""
         try:
             collected_files = [f for f in os.listdir(self.collected_dir) 
                              if f.startswith('collected_data_') and f.endswith('.txt')]
             total_size = sum(os.path.getsize(os.path.join(self.collected_dir, f)) 
                            for f in collected_files)
-            
             return {
                 'total_files': len(collected_files),
                 'total_hashes': len(self.collected_hashes),
                 'total_size_kb': round(total_size / 1024, 2),
-                'counter': self.collection_counter
+                'counter': self.collection_counter,
+                'github_enabled': self.use_github
             }
         except Exception as e:
             return {'error': str(e)}
     
     def is_connected(self):
-        """Check if internet connection is available."""
         try:
             url = "https://www.google.com"
             self.make_request(url, timeout=5)
@@ -1093,42 +1092,35 @@ class WebSearchHandler:
 # ========== STANDALONE TEST ==========
 if __name__ == "__main__":
     print("=" * 60)
-    print("🌐 Web Search Handler - Auto Collection Test")
+    print("🌐 Web Search Handler - GitHub Storage Test")
     print("=" * 60)
     
     handler = WebSearchHandler()
     
-    # Check connection
     print("\n📡 Checking internet connection...")
     if handler.is_connected():
         print("✓ Internet connection available")
     else:
-        print("✗ No internet connection - some features may not work")
+        print("✗ No internet connection")
     
-    # Show stats
-    print("\n📊 Cache Statistics:")
-    stats = handler.get_cache_stats()
-    print(f"  Total cached searches: {stats['total_entries']}")
+    print(f"\n📊 GitHub Storage: {'✅ Enabled' if handler.use_github else '❌ Disabled'}")
     
     print("\n📊 Collection Statistics:")
     col_stats = handler.get_collection_stats()
     for key, value in col_stats.items():
         print(f"  {key}: {value}")
     
-    # Run one manual collection
     print("\n" + "=" * 60)
     print("RUNNING MANUAL DATA COLLECTION")
     print("=" * 60)
     
     handler.collect_data_auto()
     
-    # Show updated stats
     print("\n📊 Updated Collection Statistics:")
     col_stats = handler.get_collection_stats()
     for key, value in col_stats.items():
         print(f"  {key}: {value}")
     
-    # Ask to start auto collection
     print("\n" + "=" * 60)
     response = input("Start auto collection (every 2.5 min)? (y/n): ").strip().lower()
     
@@ -1136,7 +1128,6 @@ if __name__ == "__main__":
         handler.start_auto_collection()
         print("\n🔄 Auto collection running in background...")
         print("Press Ctrl+C to stop")
-        
         try:
             while True:
                 time.sleep(1)
