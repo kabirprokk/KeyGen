@@ -26,17 +26,31 @@ class KeyGenAI:
         self.sentence_bank = []
         self.entity_index = defaultdict(list)
         self.ngram_index = defaultdict(list)
+        self.concept_index = defaultdict(set)
+        self.word_cooccurrence = defaultdict(Counter)
+        self.word_vectors = {}
         self.word_freq = Counter()
+        self.doc_freq = Counter()
         self.entity_map = {}
+        self.total_docs = 0
         
-        # Enhanced tokenization stopwords
+        # Stopwords
         self.stopwords = {
             "a", "an", "the", "and", "or", "but", "is", "are", "was", "were",
             "to", "at", "by", "for", "of", "with", "in", "on", "that", "this",
             "it", "its", "be", "been", "being", "have", "has", "had", "do", "does",
             "did", "will", "would", "could", "should", "may", "might", "can", "shall",
             "i", "you", "he", "she", "we", "they", "me", "him", "her", "us", "them",
-            "my", "your", "his", "our", "their", "mine", "yours", "hers", "ours", "theirs"
+            "my", "your", "his", "our", "their", "mine", "yours", "hers", "ours", "theirs",
+            "about", "above", "after", "again", "all", "also", "any", "because",
+            "before", "between", "both", "but", "come", "could", "did", "does",
+            "doing", "down", "during", "each", "few", "from", "further", "get",
+            "got", "had", "has", "just", "know", "like", "make", "more",
+            "most", "much", "must", "now", "off", "only", "other", "our",
+            "out", "over", "own", "part", "put", "same", "say", "see",
+            "seem", "since", "some", "still", "such", "take", "than", "then",
+            "think", "through", "too", "under", "until", "way", "well", "what",
+            "when", "where", "which", "while", "who", "why", "would"
         }
         
         self.greetings = {
@@ -59,34 +73,42 @@ class KeyGenAI:
         os.makedirs(self.knowledge_dir, exist_ok=True)
         self.load_all_data()
         self.build_indexes()
+        self.build_semantic_network()
 
-    # ========== POWERFUL TOKENIZATION ENGINE ==========
+    # ========== TOKENIZATION ==========
     
     def tokenize(self, text):
-        """Advanced tokenization with entity recognition."""
+        """Tokenize text into words."""
         if not text:
             return []
-        tokens = re.findall(r'\b\w+\b', str(text).lower())
-        return tokens
+        return re.findall(r'\b\w+\b', str(text).lower())
+    
+    def tokenize_no_stopwords(self, text):
+        """Tokenize and remove stopwords."""
+        tokens = self.tokenize(text)
+        return [t for t in tokens if t not in self.stopwords and len(t) > 1]
+    
+    def normalize_text(self, text):
+        """Normalize text for comparison - remove punctuation, lowercase, etc."""
+        text = text.lower().strip()
+        text = re.sub(r'[^\w\s]', '', text)
+        text = re.sub(r'\s+', ' ', text)
+        return text.strip()
     
     def extract_entities(self, text):
         """Extract named entities from text."""
         entities = []
-        # Capitalized multi-word phrases
         proper_nouns = re.findall(r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b', text)
         entities.extend(proper_nouns)
-        # Single capitalized words
         single_proper = re.findall(r'(?<=\s)([A-Z][a-z]+)\b', text)
         entities.extend([w for w in single_proper if w.lower() not in self.stopwords])
-        # Numbers
         numbers = re.findall(r'\b\d+(?:\.\d+)?\b', text)
         entities.extend(numbers)
-        # Years
         years = re.findall(r'\b(20\d{2})\b', text)
         entities.extend(years)
         return list(set(entities))
     
-    def generate_ngrams(self, tokens, n_range=(1, 4)):
+    def generate_ngrams(self, tokens, n_range=(1, 5)):
         """Generate n-grams from tokens."""
         ngrams = []
         for n in range(n_range[0], n_range[1] + 1):
@@ -95,46 +117,19 @@ class KeyGenAI:
                 ngrams.append(ngram)
         return ngrams
     
-    def extract_keywords(self, text, top_n=10):
-        """Extract important keywords using TF-IDF scoring."""
-        tokens = self.tokenize(text)
-        content_words = [t for t in tokens if t not in self.stopwords and len(t) > 1]
-        word_scores = {}
-        total_docs = max(len(self.sentence_bank), 1)
-        
-        for word in set(content_words):
-            tf = content_words.count(word) / max(len(content_words), 1)
-            doc_count = sum(1 for s in self.sentence_bank if word in s.lower())
-            idf = math.log(total_docs / max(doc_count, 1))
-            word_scores[word] = tf * idf
-        
-        sorted_words = sorted(word_scores.items(), key=lambda x: x[1], reverse=True)
-        return [word for word, score in sorted_words[:top_n]]
-    
-    def extract_question_focus(self, question):
-        """Extract the core focus of a question."""
-        q = question.lower().strip()
-        focus = re.sub(r'^(who|what|when|where|why|how|which|is|are|do|does|did|can|could|will|would|shall|should)\s+', '', q)
-        focus = focus.rstrip('?')
-        entities = self.extract_entities(question)
-        keywords = self.extract_keywords(focus, top_n=5)
-        return focus, entities, keywords
-    
     # ========== KNOWLEDGE INDEXING ==========
     
     def build_indexes(self):
-        """Build powerful search indexes from all knowledge sources."""
-        print("Building knowledge indexes...")
+        """Build search indexes from all knowledge sources."""
+        print("📚 Building knowledge indexes...")
         
         all_sentences = []
         
-        # From JSON knowledge base
         for module in self.knowledge_base:
             for response in module.get("responses", []):
                 sentences = re.split(r'(?<=[.!?])\s+', response)
                 all_sentences.extend([s.strip() for s in sentences if len(s) > 5])
         
-        # From GK base
         for fact in self.gk_base:
             q = fact.get("q", "")
             a = fact.get("a", "")
@@ -145,35 +140,37 @@ class KeyGenAI:
                 sentences = re.split(r'(?<=[.!?])\s+', a)
                 all_sentences.extend([s.strip() for s in sentences if len(s) > 5])
         
-        # From raw text files
         for sentence in self.raw_data_chunks:
             if len(sentence) > 10:
                 all_sentences.append(sentence)
         
-        # From learned facts
         for question, answer in self.learned_facts.items():
             all_sentences.append(question)
             all_sentences.append(answer)
         
         self.sentence_bank = list(set(all_sentences))
+        self.total_docs = len(self.sentence_bank)
         
-        # Build entity index
+        # Build indexes
+        self.entity_index.clear()
+        self.ngram_index.clear()
+        self.word_freq.clear()
+        self.doc_freq.clear()
+        
         for sentence in self.sentence_bank:
+            tokens = self.tokenize_no_stopwords(sentence)
+            self.word_freq.update(tokens)
+            
+            for token in set(tokens):
+                self.doc_freq[token] += 1
+            
             entities = self.extract_entities(sentence)
             for entity in entities:
                 self.entity_index[entity.lower()].append(sentence)
-        
-        # Build n-gram index
-        for sentence in self.sentence_bank:
-            tokens = self.tokenize(sentence)
+            
             ngrams = self.generate_ngrams(tokens, n_range=(2, 5))
             for ngram in ngrams:
                 self.ngram_index[ngram].append(sentence)
-        
-        # Build word frequency
-        for sentence in self.sentence_bank:
-            tokens = self.tokenize(sentence)
-            self.word_freq.update(tokens)
         
         self._build_entity_map()
         
@@ -183,6 +180,7 @@ class KeyGenAI:
     
     def _build_entity_map(self):
         """Map entity variations to canonical forms."""
+        self.entity_map.clear()
         for entity in self.entity_index:
             normalized = re.sub(r'[^\w\s]', '', entity.lower()).strip()
             if normalized not in self.entity_map:
@@ -195,66 +193,244 @@ class KeyGenAI:
                         if partial not in self.entity_map:
                             self.entity_map[partial] = entity
     
-    # ========== INTELLIGENT SEARCH ==========
+    def build_semantic_network(self):
+        """Build semantic relationships from the knowledge base."""
+        print("🧠 Building semantic network...")
+        
+        self.word_cooccurrence.clear()
+        self.concept_index.clear()
+        
+        for sentence in self.sentence_bank:
+            tokens = self.tokenize_no_stopwords(sentence)
+            unique_tokens = set(tokens)
+            
+            # Build co-occurrence
+            for t1 in unique_tokens:
+                for t2 in unique_tokens:
+                    if t1 != t2:
+                        self.word_cooccurrence[t1][t2] += 1
+            
+            # Build concept index from n-grams
+            ngrams = self.generate_ngrams(tokens, n_range=(2, 4))
+            for ngram in ngrams:
+                for token in unique_tokens:
+                    if token not in ngram:
+                        self.concept_index[ngram].add(token)
+                        self.concept_index[token].add(ngram)
+        
+        # Build word vectors
+        self._build_word_vectors()
+        
+        print(f"✓ Built semantic network with {len(self.word_cooccurrence)} words")
+        print(f"✓ Built {len(self.concept_index)} concept associations")
     
-    def calculate_similarity(self, text1, text2):
-        """Calculate semantic similarity between two texts."""
-        tokens1 = set(self.tokenize(text1))
-        tokens2 = set(self.tokenize(text2))
+    def _build_word_vectors(self):
+        """Build simple word vectors from co-occurrence."""
+        self.word_vectors.clear()
+        vocab = list(self.word_cooccurrence.keys())
+        
+        for word in vocab:
+            vector = {}
+            for context_word in vocab[:200]:
+                if context_word in self.word_cooccurrence[word]:
+                    vector[context_word] = self.word_cooccurrence[word][context_word]
+            if vector:
+                self.word_vectors[word] = vector
+    
+    # ========== SEMANTIC SIMILARITY ==========
+    
+    def get_synonyms(self, word, top_n=5):
+        """Find similar words based on co-occurrence."""
+        if word not in self.word_cooccurrence:
+            return []
+        similar = self.word_cooccurrence[word].most_common(top_n)
+        return [w for w, _ in similar]
+    
+    def expand_query(self, question):
+        """Expand a question with related terms from the knowledge base."""
+        tokens = self.tokenize_no_stopwords(question)
+        expanded = set(tokens)
+        
+        for token in tokens:
+            # Add related concepts from concept index
+            for ngram, related in self.concept_index.items():
+                if token in ngram.split():
+                    expanded.update(related)
+            
+            # Add co-occurring words
+            synonyms = self.get_synonyms(token, top_n=3)
+            expanded.update(synonyms)
+        
+        return list(expanded)
+    
+    def generate_question_variations(self, question):
+        """Generate multiple versions of the question for better matching."""
+        normalized = self.normalize_text(question)
+        tokens = self.tokenize_no_stopwords(question)
+        variations = [normalized]
+        
+        # Remove question words
+        clean = re.sub(r'\b(who|what|when|where|why|how|which|is|are|do|does|did|can|could|will|would|tell|explain|describe|define)\b', '', normalized, flags=re.I)
+        clean = re.sub(r'\s+', ' ', clean).strip()
+        if clean:
+            variations.append(clean)
+        
+        # Remove trailing '?'
+        if normalized.endswith('?'):
+            variations.append(normalized[:-1])
+        
+        # Generate with number variations
+        for token in tokens:
+            if token in ["1st", "first"]:
+                variations.extend([
+                    normalized.replace("1st", "first"),
+                    normalized.replace("first", "1st"),
+                    normalized.replace("first", "one")
+                ])
+            if token in ["2nd", "second"]:
+                variations.extend([
+                    normalized.replace("2nd", "second"),
+                    normalized.replace("second", "2nd"),
+                    normalized.replace("second", "two")
+                ])
+            if token in ["3rd", "third"]:
+                variations.extend([
+                    normalized.replace("3rd", "third"),
+                    normalized.replace("third", "3rd"),
+                    normalized.replace("third", "three")
+                ])
+        
+        # Generate with possessive variations
+        for token in tokens:
+            if token.endswith("s") and token[:-1] + "'s" not in tokens:
+                variations.append(normalized.replace(token, token[:-1] + "'s"))
+            if token.endswith("'s") and token[:-2] + "s" not in tokens:
+                variations.append(normalized.replace(token, token[:-2] + "s"))
+        
+        return list(set(variations))
+    
+    def calculate_semantic_similarity(self, text1, text2):
+        """Calculate deep semantic similarity between two texts."""
+        tokens1 = set(self.tokenize_no_stopwords(text1))
+        tokens2 = set(self.tokenize_no_stopwords(text2))
+        
         if not tokens1 or not tokens2:
             return 0
         
+        # Direct word overlap
         intersection = len(tokens1.intersection(tokens2))
         union = len(tokens1.union(tokens2))
-        jaccard = intersection / union if union > 0 else 0
+        direct_similarity = intersection / union if union > 0 else 0
         
+        # Semantic overlap via co-occurrence
+        semantic_overlap = 0
+        total_pairs = 0
+        for t1 in tokens1:
+            for t2 in tokens2:
+                if t1 != t2:
+                    total_pairs += 1
+                    if t2 in self.word_cooccurrence[t1]:
+                        semantic_overlap += 1
+                    elif t1 in self.word_cooccurrence[t2]:
+                        semantic_overlap += 1
+        
+        semantic_similarity = semantic_overlap / total_pairs if total_pairs > 0 else 0
+        
+        # N-gram overlap
+        ngrams1 = set(self.generate_ngrams(list(tokens1), n_range=(2, 3)))
+        ngrams2 = set(self.generate_ngrams(list(tokens2), n_range=(2, 3)))
+        ngram_overlap = len(ngrams1.intersection(ngrams2)) / max(len(ngrams1.union(ngrams2)), 1)
+        
+        # Entity overlap
         entities1 = set(e.lower() for e in self.extract_entities(text1))
         entities2 = set(e.lower() for e in self.extract_entities(text2))
         entity_overlap = len(entities1.intersection(entities2)) / max(len(entities1.union(entities2)), 1)
         
-        return jaccard * 0.6 + entity_overlap * 0.4
-    
-    def search_knowledge(self, question, top_k=5):
-        """Multi-strategy search for the most relevant knowledge."""
-        focus, entities, keywords = self.extract_question_focus(question)
-        results = []
+        # Weighted combination
+        final_score = (
+            direct_similarity * 0.35 +
+            semantic_similarity * 0.25 +
+            ngram_overlap * 0.25 +
+            entity_overlap * 0.15
+        )
         
-        # Strategy 1: Exact entity match
+        return final_score
+    
+    def calculate_tfidf_score(self, query, sentence):
+        """Calculate TF-IDF based relevance score."""
+        query_tokens = self.tokenize_no_stopwords(query)
+        sentence_tokens = self.tokenize_no_stopwords(sentence)
+        
+        if not query_tokens or not sentence_tokens:
+            return 0
+        
+        score = 0
+        for token in query_tokens:
+            if token in sentence_tokens:
+                tf = sentence_tokens.count(token) / max(len(sentence_tokens), 1)
+                idf = math.log(self.total_docs / max(self.doc_freq.get(token, 1), 1))
+                score += tf * idf
+        
+        return score
+    
+    # ========== SEARCH ENGINE ==========
+    
+    def search_knowledge(self, question, top_k=10):
+        """Multi-strategy semantic search."""
+        results = []
+        variations = self.generate_question_variations(question)
+        expanded_terms = self.expand_query(question)
+        
+        # Strategy 1: Direct sentence matching with semantic similarity
+        for sentence in self.sentence_bank:
+            best_sim = 0
+            for var in variations:
+                sim = self.calculate_semantic_similarity(var, sentence)
+                best_sim = max(best_sim, sim)
+            
+            if best_sim > 0.1:
+                tfidf = self.calculate_tfidf_score(question, sentence)
+                score = best_sim * 0.7 + tfidf * 0.3
+                results.append((score, sentence, "semantic_match"))
+        
+        # Strategy 2: Entity-based matching
+        entities = self.extract_entities(question)
         for entity in entities:
             entity_lower = entity.lower()
             if entity_lower in self.entity_index:
                 for sentence in self.entity_index[entity_lower]:
-                    score = self.calculate_similarity(question, sentence)
+                    score = self.calculate_semantic_similarity(question, sentence) + 0.1
                     results.append((score, sentence, "entity_match"))
         
-        # Strategy 2: N-gram matching
-        tokens = self.tokenize(focus)
-        ngrams = self.generate_ngrams(tokens, n_range=(2, 4))
-        for ngram in ngrams:
-            if ngram in self.ngram_index:
-                for sentence in self.ngram_index[ngram]:
-                    score = self.calculate_similarity(question, sentence)
-                    score += 0.1
-                    results.append((score, sentence, "ngram_match"))
+        # Strategy 3: N-gram matching
+        for var in variations:
+            tokens = self.tokenize_no_stopwords(var)
+            ngrams = self.generate_ngrams(tokens, n_range=(2, 4))
+            for ngram in ngrams:
+                if ngram in self.ngram_index:
+                    for sentence in self.ngram_index[ngram]:
+                        score = self.calculate_semantic_similarity(question, sentence) + 0.15
+                        results.append((score, sentence, "ngram_match"))
         
-        # Strategy 3: Keyword matching
+        # Strategy 4: Expanded term matching
         for sentence in self.sentence_bank:
-            keyword_matches = sum(1 for kw in keywords if kw in sentence.lower())
-            if keyword_matches >= 2:
-                score = keyword_matches / max(len(keywords), 1)
-                score += self.calculate_similarity(question, sentence)
-                results.append((score, sentence, "keyword_match"))
+            sent_tokens = set(self.tokenize_no_stopwords(sentence))
+            expanded_matches = len(set(expanded_terms).intersection(sent_tokens))
+            if expanded_matches >= 3:
+                score = expanded_matches / max(len(expanded_terms), 1)
+                score += self.calculate_semantic_similarity(question, sentence)
+                results.append((score, sentence, "expanded_match"))
         
-        # Strategy 4: Learned facts exact match
+        # Strategy 5: Learned facts
         for learned_q, learned_a in self.learned_facts.items():
-            if self.calculate_similarity(question, learned_q) > 0.5:
-                results.append((0.9, learned_a, "learned_fact"))
+            if self.calculate_semantic_similarity(question, learned_q) > 0.4:
+                results.append((0.95, learned_a, "learned_fact"))
         
-        # Remove duplicates and sort by score
+        # Remove duplicates
         seen = set()
         unique_results = []
         for score, sentence, source in sorted(results, key=lambda x: x[0], reverse=True):
-            normalized = sentence.lower().strip()
+            normalized = self.normalize_text(sentence)
             if normalized not in seen:
                 seen.add(normalized)
                 unique_results.append((score, sentence, source))
@@ -272,7 +448,7 @@ class KeyGenAI:
             return "country"
         if q.startswith("which club") or q.startswith("which team"):
             return "club"
-        if q.startswith("what is") or q.startswith("define"):
+        if q.startswith("what is") or q.startswith("define") or q.startswith("explain"):
             return "definition"
         if q.startswith("when"):
             return "date"
@@ -286,86 +462,48 @@ class KeyGenAI:
             return "choice"
         return "general"
     
-    def extract_exact_answer(self, question, sentences):
-        """Extract a precise, short answer from relevant sentences."""
+    def extract_best_answer(self, question, results):
+        """Extract the best answer from search results."""
+        if not results:
+            return None
+        
         q_type = self.detect_question_type(question)
-        combined = " ".join([s[1] for s in sentences[:3]])
+        combined = " ".join([s[1] for s in results[:5]])
         
-        if q_type == "person":
-            patterns = [
-                r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})\s+(?:won|claimed|secured|became|crowned|named|selected|elected|is|was)',
-                r'(?:won by|awarded to|champion[:\s]+|winner[:\s]+)\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})',
-                r'([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})\s+(?:is|was|became)\s+(?:the\s+)?(?:champion|winner|victor|first|youngest|oldest)',
-            ]
-            for pattern in patterns:
-                match = re.search(pattern, combined)
-                if match:
-                    return match.group(1).strip()
+        # For definition questions, return the most relevant full sentence
+        if q_type in ("definition", "general", "reason", "method"):
+            if results and results[0][0] > 0.3:
+                answer = results[0][1]
+                if len(answer) > 300:
+                    answer = answer[:300].rsplit(' ', 1)[0] + "..."
+                return answer
         
-        if q_type in ("club", "team"):
-            patterns = [
-                r'([A-Z][a-zA-Z]+(?:\s+(?:United|City|Town|Rovers|Rangers|Athletic|Albion|Villa|Forest|Palace|Hotspur|Wednesday|County|Wanderers|Alexandra|Stanley|Orient|Argyle|FC|Football Club|AFC)))\s+(?:won|defeated|beat|claimed|secured|lifted)',
-                r'(?:defeated|beat)\s+([A-Z][a-zA-Z]+(?:\s+(?:United|City|Town|FC))?)',
-                r'([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,2})\s+(?:won|claimed|secured|lifted|took)\s+the\s+(?:FA Cup|trophy|title|championship)',
-            ]
-            for pattern in patterns:
-                match = re.search(pattern, combined)
-                if match:
-                    return match.group(1).strip()
+        # For specific questions, try to extract a concise answer
+        best_sentence = results[0][1] if results else None
         
-        if q_type == "country":
-            country_names = [
-                "India", "Australia", "England", "South Africa", "New Zealand", "Pakistan",
-                "Sri Lanka", "Bangladesh", "Afghanistan", "West Indies", "Zimbabwe", "Ireland",
-                "United States", "China", "Russia", "Brazil", "Argentina", "Germany", "France",
-                "Spain", "Italy", "Japan", "South Korea", "Canada", "Mexico"
-            ]
-            for country in country_names:
-                if country.lower() in combined.lower():
-                    return country
+        # Try to find a sentence that directly answers the question
+        question_tokens = set(self.tokenize_no_stopwords(question))
+        for _, sentence, _ in results[:3]:
+            sent_tokens = set(self.tokenize_no_stopwords(sentence))
+            overlap = len(question_tokens.intersection(sent_tokens))
+            if overlap >= 2 and len(sentence) < 500:
+                return sentence
         
-        if q_type == "date":
-            match = re.search(r'(?:\d{1,2}\s+)?(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}', combined)
-            if match:
-                return match.group(0)
-            match = re.search(r'\b(20\d{2})\b', combined)
-            if match:
-                return match.group(0)
-        
-        # Return the most relevant sentence
-        if sentences:
-            best = sentences[0][1]
-            if len(best) > 300:
-                best = best[:300].rsplit(' ', 1)[0] + "..."
-            return best
-        
-        return None
+        return best_sentence
     
     def generate_answer(self, question):
         """Generate a comprehensive answer from knowledge base."""
-        results = self.search_knowledge(question, top_k=5)
+        results = self.search_knowledge(question, top_k=10)
         
         if not results:
             return None
         
-        # Try to extract a precise answer
-        exact = self.extract_exact_answer(question, results)
-        if exact and len(exact) < 200:
-            return exact
+        # Check if top result has good score
+        if results[0][0] < 0.15:
+            return None
         
-        # Combine relevant sentences
-        answer_parts = []
-        seen = set()
-        for score, sentence, source in results[:3]:
-            normalized = sentence.lower().strip()
-            if normalized not in seen and len(sentence) > 10:
-                seen.add(normalized)
-                answer_parts.append(sentence)
-        
-        if answer_parts:
-            return " ".join(answer_parts)
-        
-        return None
+        answer = self.extract_best_answer(question, results)
+        return answer
     
     # ========== LEARNING SYSTEM ==========
     
@@ -378,15 +516,28 @@ class KeyGenAI:
         if answer not in self.sentence_bank:
             self.sentence_bank.append(answer)
         
+        self.total_docs = len(self.sentence_bank)
+        
         for sentence in [question, answer]:
+            tokens = self.tokenize_no_stopwords(sentence)
+            self.word_freq.update(tokens)
+            for token in set(tokens):
+                self.doc_freq[token] += 1
+            
             entities = self.extract_entities(sentence)
             for entity in entities:
                 self.entity_index[entity.lower()].append(sentence)
-            tokens = self.tokenize(sentence)
+            
             ngrams = self.generate_ngrams(tokens, n_range=(2, 5))
             for ngram in ngrams:
                 self.ngram_index[ngram].append(sentence)
-            self.word_freq.update(tokens)
+            
+            # Update co-occurrence
+            unique_tokens = set(tokens)
+            for t1 in unique_tokens:
+                for t2 in unique_tokens:
+                    if t1 != t2:
+                        self.word_cooccurrence[t1][t2] += 1
         
         self.save_learned_facts()
         return True
@@ -400,14 +551,26 @@ class KeyGenAI:
         if any(pattern in text.lower() for pattern in factual_patterns):
             if text not in self.sentence_bank:
                 self.sentence_bank.append(text)
+                self.total_docs = len(self.sentence_bank)
+                
+                tokens = self.tokenize_no_stopwords(text)
+                self.word_freq.update(tokens)
+                for token in set(tokens):
+                    self.doc_freq[token] += 1
+                
                 entities = self.extract_entities(text)
                 for entity in entities:
                     self.entity_index[entity.lower()].append(text)
-                tokens = self.tokenize(text)
+                
                 ngrams = self.generate_ngrams(tokens, n_range=(2, 5))
                 for ngram in ngrams:
                     self.ngram_index[ngram].append(text)
-                self.word_freq.update(tokens)
+                
+                unique_tokens = set(tokens)
+                for t1 in unique_tokens:
+                    for t2 in unique_tokens:
+                        if t1 != t2:
+                            self.word_cooccurrence[t1][t2] += 1
                 
                 try:
                     with open(self.user_mem_file, 'a', encoding='utf-8') as f:
@@ -429,6 +592,9 @@ class KeyGenAI:
     
     def load_all_data(self):
         """Load all knowledge sources."""
+        # Also load from collected directory
+        collected_dir = os.path.join(self.knowledge_dir, "collected")
+        
         try:
             if os.path.exists(self.data_file):
                 with open(self.data_file, 'r', encoding='utf-8') as f:
@@ -459,10 +625,26 @@ class KeyGenAI:
             self.learned_facts = {}
         
         self.raw_data_chunks = []
+        
+        # Load from knowledge directory
         if os.path.exists(self.knowledge_dir):
             for filename in os.listdir(self.knowledge_dir):
                 if filename.endswith(".txt"):
                     filepath = os.path.join(self.knowledge_dir, filename)
+                    try:
+                        with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+                            text = f.read()
+                            if text.strip():
+                                sentences = re.split(r'(?<=[.!?])\s+', text)
+                                self.raw_data_chunks.extend([s.strip() for s in sentences if len(s) > 10])
+                    except:
+                        pass
+        
+        # Load from collected directory
+        if os.path.exists(collected_dir):
+            for filename in os.listdir(collected_dir):
+                if filename.endswith(".txt"):
+                    filepath = os.path.join(collected_dir, filename)
                     try:
                         with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
                             text = f.read()
@@ -513,11 +695,9 @@ class KeyGenAI:
         raw = user_input.strip()
         low = raw.lower()
         
-        # Greetings
         if self.is_greeting(raw):
             return self.get_greeting_response()
         
-        # Learning commands
         if low.startswith("learn "):
             content = raw[6:].strip()
             if " : " in content or " = " in content or " -> " in content:
@@ -532,15 +712,18 @@ class KeyGenAI:
                 return f"✅ Learned from: '{content[:100]}...'"
             return "Please use format: learn question : answer"
         
-        # Reload command
         if low == "reload knowledge":
             self.load_all_data()
             self.build_indexes()
+            self.build_semantic_network()
             return "✅ Knowledge base reloaded and re-indexed!"
         
-        # Status command
         if low == "status":
-            return f"📊 Knowledge Base Status:\n• Modules: {len(self.knowledge_base)}\n• GK Facts: {len(self.gk_base)}\n• Learned Facts: {len(self.learned_facts)}\n• Sentences: {len(self.sentence_bank)}\n• Entities: {len(self.entity_index)}\n• N-grams: {len(self.ngram_index)}"
+            return f"📊 Knowledge Base Status:\n• Modules: {len(self.knowledge_base)}\n• GK Facts: {len(self.gk_base)}\n• Learned Facts: {len(self.learned_facts)}\n• Sentences: {len(self.sentence_bank)}\n• Entities: {len(self.entity_index)}\n• N-grams: {len(self.ngram_index)}\n• Semantic Words: {len(self.word_cooccurrence)}"
+        
+        if low == "rebuild semantic":
+            self.build_semantic_network()
+            return "✅ Semantic network rebuilt!"
         
         # Try to answer from knowledge
         answer = self.generate_answer(raw)
@@ -566,7 +749,6 @@ class ChatHandler(BaseHTTPRequestHandler):
             self.send_header('Content-type', 'text/html')
             self.end_headers()
             
-            # Read the HTML file
             html_path = os.path.join(os.path.dirname(__file__), 'index.html')
             try:
                 with open(html_path, 'r', encoding='utf-8') as f:
@@ -619,8 +801,8 @@ def run_server():
 ╔══════════════════════════════════════════╗
 ║       🧠 KeyGen.ai ONLINE               ║
 ║   http://0.0.0.0:{port}                  ║
-║   Pure Knowledge Engine                 ║
-║   No external web - All local           ║
+║   Semantic Knowledge Engine             ║
+║   Auto-learns from your data            ║
 ╚══════════════════════════════════════════╝
     """)
     
