@@ -583,7 +583,7 @@ class KeyGenAI:
                         self.mesh.learn(q, a)
                         self.qa_cache[q.lower()] = a
                         try:
-                            with open(os.path.join(self.knowledge_dir, "learned_knowledge.json"), 'w') as f:
+                            with open(os.path.join(self.knowledge_dir, "learned_knowledge.json"), 'w', encoding='utf-8') as f:
                                 json.dump(self.qa_cache, f, indent=2)
                         except:
                             pass
