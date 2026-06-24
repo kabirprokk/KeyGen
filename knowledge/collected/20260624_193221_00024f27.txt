@@ -1,0 +1,7 @@
+TITLE: History of calculus
+SOURCE: Wikipedia
+URL: https://en.wikipedia.org/wiki/History_of_calculus
+DATE: 2026-06-24T19:32:21.144903
+============================================================
+
+Calculus, originally called infinitesimal calculus, is a mathematical discipline focused on limits, continuity, derivatives, integrals, and infinite series. Many elements of calculus appeared in ancient Greece, then in China and the Middle East, and still later again in medieval Europe and in India. Infinitesimal calculus was developed in the late 17th century by Isaac Newton and Gottfried Wilhelm Leibniz independently of each other. An argument over priority led to the Leibniz Newton calculus controversy which continued until the death of Leibniz in 1716. The development of calculus and its uses within the sciences have continued to the present.

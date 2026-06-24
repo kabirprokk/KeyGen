@@ -1,0 +1,7 @@
+TITLE: List of datasets for machine-learning research
+SOURCE: Wikipedia
+URL: https://en.wikipedia.org/wiki/List_of_datasets_for_machine-learning_research
+DATE: 2026-06-24T19:14:54.029982
+============================================================
+
+These datasets are used in machine learning (ML) research and have been cited in peer-reviewed academic journals. Datasets are an integral part of the field of machine learning. Major advances in this field can result from advances in learning algorithms (such as deep learning), computer hardware, and, less intuitively, the availability of high-quality training datasets. High-quality labeled training datasets for supervised and semi-supervised machine-learning algorithms are usually difficult and expensive to produce because of the large amount of time needed to label the data. Although they do not need to be labeled, high-quality unlabeled datasets for unsupervised learning can also be difficult and costly to produce. Many organizations, including governments, publish and share their datasets, often using common metadata formats (such as Croissant). The datasets are classified, based on the licenses, into two groups: open data and non-open data. The datasets from various governmental-bodies are presented in List of open government data sites. The datasets are ported on open data portals. They are made available for searching, depositing and accessing through interfaces like Open API. The datasets are made available as various sorted types and subtypes.

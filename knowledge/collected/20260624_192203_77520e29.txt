@@ -1,0 +1,7 @@
+TITLE: Humanoid robot
+SOURCE: Wikipedia
+URL: https://en.wikipedia.org/wiki/Humanoid_robot
+DATE: 2026-06-24T19:22:03.847301
+============================================================
+
+A humanoid robot is a robot resembling the human body in shape. The design may be aimed at functional purposes, such as interacting with human tools and environments and working alongside humans, for experimental purposes, such as the study of bipedal locomotion, or for other purposes. In general, humanoid robots are characterized by their anthropomorphic design, which includes a torso, a head, two arms, and two legs. Some humanoid robots may have a more limited range of body replicas, comprising only a subset of the above-mentioned components. Androids are humanoid robots designed to more closely resemble the human physique. The term gynoid is sometimes used to refer to robots that look female.

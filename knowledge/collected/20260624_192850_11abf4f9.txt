@@ -1,0 +1,7 @@
+TITLE: The Principles of Quantum Mechanics
+SOURCE: Wikipedia
+URL: https://en.wikipedia.org/wiki/The_Principles_of_Quantum_Mechanics
+DATE: 2026-06-24T19:28:50.846832
+============================================================
+
+The Principles of Quantum Mechanics is an influential monograph written by Paul Dirac and first published by Oxford University Press in 1930. In this book, Dirac presents quantum mechanics in a formal, logically consistent, and axiomatic fashion, making the book the first of its kind. It is based on matrices and operators rather than wave particle duality. Its 82 sections contain 785 equations with no diagrams. Nor does it have an index, a bibliography, or a list of suggestions for further reading. The first half of the book lays down the foundations of quantum mechanics while the second half focuses on its applications. Dirac did not pursue a historical approach to the subject. Nor did he discuss at length the philosophy of quantum mechanics.

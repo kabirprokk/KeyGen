@@ -1,0 +1,7 @@
+TITLE: Zeroth law of thermodynamics
+SOURCE: Wikipedia
+URL: https://en.wikipedia.org/wiki/Zeroth_law_of_thermodynamics
+DATE: 2026-06-24T19:29:04.246057
+============================================================
+
+The zeroth law of thermodynamics is one of the four principal laws of thermodynamics. It provides an independent definition of temperature without reference to entropy, which is defined in the second law. The law was established by Ralph H. Fowler in the 1930s, long after the first, second, and third laws had been widely recognized. The zeroth law states that if two thermodynamic systems are both in thermal equilibrium with a third system, then the two systems are in thermal equilibrium with each other. Two systems are said to be in thermal equilibrium if they are linked by a wall permeable only to heat, and they do not change over time. Another formulation by James Clerk Maxwell is "All heat is of the same kind". Another statement of the law is "All diathermal walls are equivalent". The zeroth law is important for the mathematical formulation of thermodynamics. It makes the relation of thermal equilibrium between systems an equivalence relation, which can represent equality of some quantity associated with each system. A quantity that is the same for two systems, if they can be placed in thermal equilibrium with each other, is a scale of temperature. The zeroth law is needed for the definition of such scales, and justifies the use of practical thermometers.

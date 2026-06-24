@@ -1,0 +1,7 @@
+TITLE: Theoretical computer science
+SOURCE: Wikipedia
+URL: https://en.wikipedia.org/wiki/Theoretical_computer_science
+DATE: 2026-06-24T19:25:12.492917
+============================================================
+
+Theoretical computer science is a subfield of computer science and mathematics that focuses on the abstract and mathematical foundations of computation. It is difficult to circumscribe the theoretical areas precisely. The ACM's Special Interest Group on Algorithms and Computation Theory (SIGACT) provides the following description: TCS covers a wide variety of topics including algorithms, data structures, computational complexity, parallel and distributed computation, probabilistic computation, quantum computation, automata theory, information theory, cryptography, program semantics and verification, algorithmic game theory, machine learning, computational biology, computational economics, computational geometry, and computational number theory and algebra. Work in this field is often distinguished by its emphasis on mathematical technique and rigor.
