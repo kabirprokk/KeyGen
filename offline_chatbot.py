@@ -10,21 +10,11 @@ import os
 import math
 import time
 import hashlib
-import socket
-import sys
 import threading
 from collections import defaultdict, deque
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from difflib import SequenceMatcher
 from datetime import datetime
-
-# ========== PORT DETECTION (FIXED) ==========
-def get_port():
-    """Force port detection for Render."""
-    port = os.environ.get("PORT")
-    if port:
-        return int(port)
-    return 10000
 
 
 # ========== QUANTUM MEMORY CELL ==========
@@ -220,6 +210,22 @@ class MemoryNode:
         return sorted(self.connections.items(), key=lambda x: x[1], reverse=True)[:n]
 
 
+class SynapticPathway:
+    def __init__(self, source, target):
+        self.source_id = source.id if hasattr(source, 'id') else source
+        self.target_id = target.id if hasattr(target, 'id') else target
+        self.strength = 0.1
+        self.traversal_count = 0
+        self.created_at = time.time()
+        self.last_traversed = 0
+
+    def traverse(self):
+        self.traversal_count += 1
+        self.last_traversed = time.time()
+        self.strength = min(1.0, self.strength * 1.05 + 0.01)
+        return self.strength
+
+
 class NeuralMemoryMesh:
     def __init__(self):
         self.nodes = {}
@@ -365,22 +371,6 @@ class NeuralMemoryMesh:
             'total_pathways': len(self.pathways),
             'total_activations': self.total_activations,
         }
-
-
-class SynapticPathway:
-    def __init__(self, source, target):
-        self.source_id = source.id if hasattr(source, 'id') else source
-        self.target_id = target.id if hasattr(target, 'id') else target
-        self.strength = 0.1
-        self.traversal_count = 0
-        self.created_at = time.time()
-        self.last_traversed = 0
-
-    def traverse(self):
-        self.traversal_count += 1
-        self.last_traversed = time.time()
-        self.strength = min(1.0, self.strength * 1.05 + 0.01)
-        return self.strength
 
 
 # ========== MATH SOLVER ==========
@@ -533,7 +523,7 @@ class KeyGenAI:
             return best
         # Mesh query
         results = self.mesh.query(raw)
-        if results and results[0]['score'] > 0.1:
+        if map and results and results[0]['score'] > 0.1:
             ans = results[0]['content']
             if len(ans) > 600:
                 ans = ans[:600].rsplit(' ', 1)[0] + "..."
@@ -594,6 +584,7 @@ class ChatHandler(BaseHTTPRequestHandler):
 
 
 def run_server():
+    # Render binds dynamic ports here automatically
     port = int(os.environ.get("PORT", 10000))
     print(f"PORT={port}", flush=True)
     ChatHandler.bot = KeyGenAI()
