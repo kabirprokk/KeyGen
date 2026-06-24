@@ -1,0 +1,7 @@
+TITLE: Does anyone know what &quot;Quantum Computing&quot; is?
+SOURCE: StackExchange
+URL: https://stackoverflow.com/questions/3163234/does-anyone-know-what-quantum-computing-is
+DATE: 2026-06-24T19:15:02.599008
+============================================================
+
+Does anyone know what quot;Quantum Computing quot; is?. In physics, its the ability for particles to exist in multiple parallel dynamic states at a particular point in time. In computing, would it be the ability of a data bit to equal 1 or 0 at the same time, a third value like NULL unknown or multiple values?.. How can this technology be applied to: computer processors, programming, security, etc.?.. Has anyone built a practical quantum computer or developed a quantum programming language where, for example, the program code dynamically changes or is autonomous?

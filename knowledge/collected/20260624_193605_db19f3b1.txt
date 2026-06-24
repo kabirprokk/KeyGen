@@ -1,0 +1,7 @@
+TITLE: Responsive Periodic Table of Elements in HTML/CSS
+SOURCE: StackExchange
+URL: https://stackoverflow.com/questions/16761736/responsive-periodic-table-of-elements-in-html-css
+DATE: 2026-06-24T19:36:05.043520
+============================================================
+
+Responsive Periodic Table of Elements in HTML CSS. Lately, I've been studying a lot about responsive design in HTML CSS and decided to try to code the periodic table of elements in HTML CSS in order to practice. I have the basic structure of the table (Using mostly div elements) but I'm majorly lacking a responsive flow. I've tried using and it's still being stubborn. Any nudge in the right direction would be greatly appreciated. HTML: lt;!DOCTYPE html gt; lt;html gt; lt;head gt; lt;link rel "stylesheet" type "text css" href "style.css" gt; lt;title gt; Periodic Table of Elements, in CSS! lt; title gt; lt; head gt; lt;body gt; lt;section gt; lt;div id "container" gt; lt;div id "panelOne" gt; lt;div class "box" gt; H lt; div gt; lt;div class "box" gt; Li lt; div gt; lt;div class "box" gt; Na lt; div gt; lt;div class "box" gt; K lt; div gt; lt;div class "box" gt; Rb lt; div gt; lt;div class "box" gt; Cs lt; div gt; lt;div class "box" gt; Fr lt; div gt; lt; div gt; lt;div id "panelTwo" gt; lt;div class "box" gt; Be lt; div gt; lt;div class "box" gt; Mg lt; div gt; lt;div class "box" gt; Ca lt; div gt; lt;div class "b

@@ -1,0 +1,7 @@
+TITLE: How to use CCR, DSS, VPL (aka Microsoft Robotics Development Studio) outside robotics?
+SOURCE: StackExchange
+URL: https://stackoverflow.com/questions/3029978/how-to-use-ccr-dss-vpl-aka-microsoft-robotics-development-studio-outside-rob
+DATE: 2026-06-24T19:22:03.848300
+============================================================
+
+How to use CCR, DSS, VPL (aka Microsoft Robotics Development Studio) outside robotics?. How to use CCR, DSS, VPL (aka Microsoft Robotics Development Studio) outside robotics? I am looking for guidance in this field. I have tried all the examples and find the framework intriguing. Can anyone post other uses and examples, outside robotics? PS. I am looking for someone to explain some of the more complex stuff to me. I have questions regarding different implementations. If anyone is interested, i am willing to pay for a one to one talk (consulting) on the advanced topics. You can reach me via email, same name as here.

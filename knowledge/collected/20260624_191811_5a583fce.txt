@@ -1,0 +1,7 @@
+TITLE: Unicode emoji characters use different image/font based on browser
+SOURCE: StackExchange
+URL: https://stackoverflow.com/questions/51619825/unicode-emoji-characters-use-different-image-font-based-on-browser
+DATE: 2026-06-24T19:18:11.035959
+============================================================
+
+Unicode emoji characters use different image font based on browser. I am currently working on a project that embeds an object that uses unicode emoji characters. The problem is, these unicode emoji characters are displaying differently depending on which browser I use. Google Chrome and Mozilla Firefox for example just display the windows version of the unicode emoji characters. Internet Explorer 11 on the other hand displays the desired version (a custom font). Problem in pictures: This is how it should look and how it looks on Internet Explorer 11 (with custom font): This is how it currently looks on Google Chrome and Mozilla Firefox (with standard windows visuals): The unicode emoji character I am using can be found here: link. The one I am using is called: "hot beverage" on space 694. As you can see, there is one visual style we recognize, the Windows one used by Chrome and Firefox. So, now I know that Chrome and Firefox both use the windows font for the visualisation of the unicode emoji charact

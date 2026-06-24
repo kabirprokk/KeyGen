@@ -1,0 +1,7 @@
+TITLE: Cosmic Rays: what is the probability they will affect a program?
+SOURCE: StackExchange
+URL: https://stackoverflow.com/questions/2580933/cosmic-rays-what-is-the-probability-they-will-affect-a-program
+DATE: 2026-06-24T19:35:42.249151
+============================================================
+
+Cosmic Rays: what is the probability they will affect a program?. Once again I was in a design review, and encountered the claim that the probability of a particular scenario was "less than the risk of cosmic rays" affecting the program, and it occurred to me that I didn't have the faintest idea what that probability is. "Since 2-128 is 1 out of 340282366920938463463374607431768211456, I think we're justified in taking our chances here, even if these computations are off by a factor of a few billion... We're way more at risk for cosmic rays to screw us up, I believe." Is this programmer correct? What is the probability of a cosmic ray hitting a computer and affecting the execution of the program?

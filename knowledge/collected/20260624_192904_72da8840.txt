@@ -1,0 +1,7 @@
+TITLE: Python memory usage of numpy arrays
+SOURCE: StackExchange
+URL: https://stackoverflow.com/questions/11784329/python-memory-usage-of-numpy-arrays
+DATE: 2026-06-24T19:29:04.246057
+============================================================
+
+Python memory usage of numpy arrays. I'm using python to analyse some large files and I'm running into memory issues, so I've been using sys.getsizeof() to try and keep track of the usage, but it's behaviour with numpy arrays is bizarre. Here's an example involving a map of albedos that I'm having to open: gt; gt; gt; import numpy as np gt; gt; gt; import struct gt; gt; gt; from sys import getsizeof gt; gt; gt; f open('Albedo_map.assoc', 'rb') gt; gt; gt; getsizeof(f) 144 gt; gt; gt; albedo struct.unpack(' df' (7200 3600), f.read(7200 3600 4)) gt; gt; gt; getsizeof(albedo) 207360056 gt; gt; gt; albedo np.array(albedo).reshape(3600,7200) gt; gt; gt; getsizeof(albedo) 80 Well the data's still there, but the size of the object, a 3600x7200 pixel map, has gone from 200 Mb to 80 bytes. I'd like to hope that my memory issues are over and just convert everything to numpy arrays, but I feel that this behaviour, if true, would in some way violate some law of information theory or thermodynamics, or something, so I'm inclined to believe that getsizeof() doesn't work with numpy arrays. Any ideas?

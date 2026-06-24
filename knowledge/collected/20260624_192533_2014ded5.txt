@@ -1,0 +1,7 @@
+TITLE: Need a solution for 2D collision handling in Python
+SOURCE: StackExchange
+URL: https://stackoverflow.com/questions/14447606/need-a-solution-for-2d-collision-handling-in-python
+DATE: 2026-06-24T19:25:33.454407
+============================================================
+
+Need a solution for 2D collision handling in Python. I have a program written for simple 2D collision detection and handling on my current billiards simulation, however it is rubbish am looking for a solution that involves proper physics, i.e. newtons laws of motion for coliisions. what I have so far, which does not conserverve momentum and simplifies physics is def collide(ball1,ball2): dx ball1.x - ball2.x dy ball1.y - ball2.y dist (dx) 2 (dy) 2 if dist lt; (ball1.radius ball2.radius) 2: tangent atan2(dy, dx) angle 0.5 pi tangent angle1 2 tangent - ball1.angle angle2 2 tangent - ball2.angle speed1 ball2.speed e speed2 ball1.speed e (ball1.angle, ball1.speed) (angle1, speed1) (ball2.angle, ball2.speed) (angle2, speed2) ball1.x sin(angle) ball1.y - cos(angle) ball2.x - sin(angle) ball2.y cos(angle) and what i have to run the collisions is this, where the bounce() is for hitting against the wall running True while running: background() for i,ball in enumerate(balls,1): ball.bounce() ball.move() for ball2 in balls i: : collide(ball,ball2) ball.display() pygame.display.flip() i'm still pr

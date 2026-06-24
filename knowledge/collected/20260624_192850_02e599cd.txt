@@ -1,0 +1,7 @@
+TITLE: Optimization of a Trace Operator with Symmetric, PSD and Unit Trace Constraints
+SOURCE: StackExchange
+URL: https://stackoverflow.com/questions/35813091/optimization-of-a-trace-operator-with-symmetric-psd-and-unit-trace-constraints
+DATE: 2026-06-24T19:28:50.851733
+============================================================
+
+Optimization of a Trace Operator with Symmetric, PSD and Unit Trace Constraints. I'm trying to solve a simple optimisation problem, we want to have a complex valued Hermitian matrix as its variable (topic is quantum mechanics). using Convex load the optimization solvers using SCS define pauli-y projector by construction a positive operator valued hermitian matrix y_plus 1,im sqrt(2) My0 y_plus y_plus' define the variable; a 2x2 density matrix rho Variable(2, 2) problem.constraints rho rho' hermitian problem.constraints trace(rho) 1 unit trace problem.constraints rho in :SDP positive definite define the objective problem maximize(trace(rho My0)) solve solve!(problem,SCSSolver(verbose false)) problem.optval The trouble is, Julia JuMP Convex.jl all give errors when it comes to maximize(trace(rho My0)) Since the trace of rho My0 can in principle be complex, however we should be assured that rho My0 is real given the constraints on rho and My0. How to deal with these issues? There might be a simple solution. Worst case we probably have to split the real and imaginary parts.

@@ -1,0 +1,7 @@
+TITLE: Calculating an object&#39;s position, velocity and other derivatives of motion efficiently
+SOURCE: StackExchange
+URL: https://stackoverflow.com/questions/29175664/calculating-an-objects-position-velocity-and-other-derivatives-of-motion-effic
+DATE: 2026-06-24T19:25:20.945738
+============================================================
+
+Calculating an object 39;s position, velocity and other derivatives of motion efficiently. OK, here's a programming physics puzzle in, let's say Java (although it doesn't really matter - but for consistency, we will use Java). I have an array of doubles where each element represents the successive derivates of an object's position. So: d 0 position d 1 velocity d 2 accelleration etc ... There will be at least 1 and potentially any number of elements (but in practice, probably not more than 5). All elements beyond the end of the array are assumed to be zero. We also have a double t for time. So if d.length were 3 then very specifically: d 0 d 1 t d 2 t t 2 d 1 d 2 t But how can we write an iterative solution (no recursion!) that will update all of the elements of the array for time t for any length of a? Votes should be awarded for efficiency and conciseness. EDIT: The laws of motion are on the physics pages of this site, but basically each term has the form: power(t,n) factorial(n) So the next term of the first equation would be d 3 t t t 6 If you are not familiar with these equations, please don't ask me to explain. A test case: final static double D 5.0, 4.0, 3.0, 2.0, 1.0 ; double t 10.0

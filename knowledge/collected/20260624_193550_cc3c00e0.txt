@@ -1,0 +1,7 @@
+TITLE: Plot pie chart of two dataframes in python
+SOURCE: StackExchange
+URL: https://stackoverflow.com/questions/71737723/plot-pie-chart-of-two-dataframes-in-python
+DATE: 2026-06-24T19:35:50.769865
+============================================================
+
+Plot pie chart of two dataframes in python. I am using the pie chart to plot the chart for the dataframe (df). My code: import pandas as pd import numpy as np import matplotlib.pyplot as plt df pd.DataFrame( 'Subjet': 'mathematics', 'chemistry', 'physics' , 'points': 60, 30,10 ) df_mathematics pd.DataFrame( 'Subjet': 'Algebra', 'Logic', 'Number theory' , 'points': 30,15,15 ) output: However, I wanted to add the subjects of df_mathematics inside the chart to mathematics, for example, algebra, 'Logic', 'Number theory' should add to the chart with their percentage mathmatics (60 ). The expected output:

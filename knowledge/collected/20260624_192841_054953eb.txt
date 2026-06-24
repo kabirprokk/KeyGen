@@ -1,0 +1,7 @@
+TITLE: How do I write a python code that takes paragraphs as user input?
+SOURCE: StackExchange
+URL: https://stackoverflow.com/questions/52262710/how-do-i-write-a-python-code-that-takes-paragraphs-as-user-input
+DATE: 2026-06-24T19:28:41.841875
+============================================================
+
+How do I write a python code that takes paragraphs as user input?. python program of cipher text s input('Enter the plain Text gt; gt; ') Tuhin T 18,u 19,.... a 'abcdefghijklmnopqrstuvwxyz' b 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' c (int(input('Enter the code: '))) Ex. 5 for i in range(len(s)): j 0 k 0 if i 80 0 and i gt; 80: print() for j in range(len(a)): if s i a j : if (j c) lt; 25: print(a j c ,end "") k 1 if (j c) gt;25: print(a 26-j-c ,end "") k 1 if s i b j : if (j c) lt; 25: print(b j c ,end "") k 1 if (j c) gt;25: print(b 26-j-c ,end "") k 1 elif j len(a)-1 and k 0: print(s i ,end "") For input i need to enter single line inputs but i want to enter texts like this format: a German-born physicist, is best known for his famous equation, which has been dubbed as the world s most famous equation E mc2. Albert Einstein was not very satisfied with Newtonian mechanics, as he thought that these theories were not enough to explain classical mechanics and the electromagnetic field. And this inspired him to develop his singular Theory of Relativity It's to be kept in mind that I mostly use Thonny and python IDE

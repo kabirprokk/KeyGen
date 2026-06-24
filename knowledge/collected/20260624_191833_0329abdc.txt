@@ -1,0 +1,7 @@
+TITLE: Problem with question 1, week 3, Introduction_to_Data_Science_in_Python coursera
+SOURCE: StackExchange
+URL: https://stackoverflow.com/questions/67593927/problem-with-question-1-week-3-introduction-to-data-science-in-python-coursera
+DATE: 2026-06-24T19:18:33.482282
+============================================================
+
+Problem with question 1, week 3, Introduction_to_Data_Science_in_Python coursera. I'm seriously stuck with this question and have no idea what I am doing wrong. This is the error I keep getting. --------------------------------------------------------------------------- NotImplementedError Traceback (most recent call last) lt;ipython-input-39-2bd159dc8ff9 gt; in lt;module gt; 21 new_df new_df :15 22 return new_df --- gt; 23 raise NotImplementedError() NotImplementedError: I can remove the error and run the code, but the output remains wrong, I get something likethis but I should get a ranked list from 1 to 15 with no repeated countries. And this is the code I am using: Energy pd.read_excel( quot;assets Energy Indicators.xls quot;,skiprows 17,skipfooter 38,na_values '...' ) Energy.drop('Unnamed: 0', inplace True, axis 1) Energy.drop('Unnamed: 1', inplace True, axis 1) Energy.columns 'Country', 'Energy Supply', 'Energy Supply per Capita', ' Renewable' Energy 'Energy Supply' Energy 'Energy Supply' 1000000 Energy 'Country' Energy 'Country' .replace( 'China, Hong Kong Special Administrative Region':'Hong Kong', 'United Kingdom of Great Britain and Northern Ireland':'United Kingdom',

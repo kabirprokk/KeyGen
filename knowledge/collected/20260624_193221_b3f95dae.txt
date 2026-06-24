@@ -1,0 +1,7 @@
+TITLE: Mathematics - Why is Differential Calculus (MVP) in PHP a tabu?
+SOURCE: StackExchange
+URL: https://stackoverflow.com/questions/2812849/mathematics-why-is-differential-calculus-mvp-in-php-a-tabu
+DATE: 2026-06-24T19:32:21.144903
+============================================================
+
+Mathematics - Why is Differential Calculus (MVP) in PHP a tabu?. I want to do a Mean-Variance-Optimization (Markowitz) but i never found anything written in php that does this. MVP needs differential calculus. Can it be done in php and why arent there any classes works from universities? For a webapplication (regarding performance) would another language be the better choice to handle heavy calculations? Thanks so much for any help answer on this

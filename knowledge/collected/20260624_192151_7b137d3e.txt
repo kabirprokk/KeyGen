@@ -1,0 +1,7 @@
+TITLE: Cant pass data to my ListView after Json Request
+SOURCE: StackExchange
+URL: https://stackoverflow.com/questions/41089699/cant-pass-data-to-my-listview-after-json-request
+DATE: 2026-06-24T19:21:51.021638
+============================================================
+
+Cant pass data to my ListView after Json Request. So I'm retrieving some data using Json, I get the data correct(according to log) but when I try to push the data into the listview it doesn't seem to work. Here is the code: public class MainActivity extends AppCompatActivity private List lt;newsItem gt; newsFeed new ArrayList lt; gt;(); Override protected void onCreate(Bundle savedInstanceState) super.onCreate(savedInstanceState); setContentView(R.layout.activity_main); RequestQueue queue Volley.newRequestQueue(this); JsonObjectRequest myRequest new JsonObjectRequest(Request.Method.GET, " null, new Response.Listener lt;JSONObject gt;() Override public void onResponse(JSONObject response) JSONObject responseNode null; try responseNode response.getJSONObject("response"); catch (JSONException e) e.printStackTrace(); JSONArray newsItems null; try newsItems responseNode.getJSONArray("results"); catch (JSONException e)

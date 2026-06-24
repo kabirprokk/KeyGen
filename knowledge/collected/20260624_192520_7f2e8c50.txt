@@ -1,0 +1,7 @@
+TITLE: Reagent get element contents before mount
+SOURCE: StackExchange
+URL: https://stackoverflow.com/questions/63577870/reagent-get-element-contents-before-mount
+DATE: 2026-06-24T19:25:20.945738
+============================================================
+
+Reagent get element contents before mount. I'm adding some reagent to an application in which some hiccup rendering is already done on the server from a database. Obviously react then hooks into the html that it sees amp; mounts. I want to do some progressive enhancement, i.e., a react reagent component should mount but I also need the original text of the div it's going to mount on, this is put there by the database. So to react it's in the static html it is about to overwrite when it mounts. I want to save that element's contents before it's quot;deleted quot;. Here's what's not working (defn by-id id (js document.getElementById id)) (when-let el (by-id quot;lesson-app quot;) ; only mount when this el is present (let lesson-text (by-id quot;lesson-app quot;) ; try to get el contents before mount (console.log lesson-text) ; lt;- this logs contents after mount!! (rdom render lesson-app el))) ; mount the component What's logged to console here is the dom element after mount. Why is that? Was wondering if I could use a form-2 component and grab the contents in the let. That's not working for me though, interesting to know why if anyone can explain. Update I've succeeded in passing in text as an html attribute, as described a href "

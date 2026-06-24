@@ -1,0 +1,7 @@
+TITLE: Beautiful Soup 4 isn&#39;t pulling down all the html on this web page
+SOURCE: StackExchange
+URL: https://stackoverflow.com/questions/60646515/beautiful-soup-4-isnt-pulling-down-all-the-html-on-this-web-page
+DATE: 2026-06-24T19:18:21.070672
+============================================================
+
+Beautiful Soup 4 isn 39;t pulling down all the html on this web page. So, i'm trying to learn how to do web scraping with python, and to do this, i want to figure out how to scrape all of the audio files off of this website. So, here's my current code from bs4 import BeautifulSoup import requests source requests.get(' soup BeautifulSoup(source, 'lxml') print(soup) However, i don't think it's pulling down all of the HTML from the page, as this is the output i get lt;!DOCTYPE html gt; lt;html class "no-js" dir "ltr" lang "en" prefix "content: dc: foaf: og: rdfs: sioc: sioct: skos: xsd: lt;head gt; lt;meta content "IE Edge,chrome 1" http-equiv "X-UA-Compatible" gt; lt;meta charset "utf-8" gt; lt;meta content "NASA" property "og:site_name" gt; lt;link href " rel "profile" gt; lt;link href " favicon.ico" rel "shortcut icon" type "image vnd.microsoft.icon" gt; lt;meta content "text html" name "dc.format" gt; lt;meta content "Text" name "dc.type" gt; l

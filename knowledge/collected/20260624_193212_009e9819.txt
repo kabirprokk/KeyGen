@@ -1,0 +1,7 @@
+TITLE: Comparing JavaScript variable with PHP array
+SOURCE: StackExchange
+URL: https://stackoverflow.com/questions/59496080/comparing-javascript-variable-with-php-array
+DATE: 2026-06-24T19:32:12.744416
+============================================================
+
+Comparing JavaScript variable with PHP array. lt;link type "text css" rel "stylesheet" href "style_downloads.css" gt; lt;script gt; function theFunction(e) var x e.target.innerHTML; document.write(x); lt; script gt; lt;a onclick "theFunction(event)" href "" gt;Electromagnetic Theory lt; a gt; lt;a onclick "theFunction(event)" href "" gt;Manufacturing Technology-I lt; a gt; lt;?php con mysqli_connect('localhost', 'root'); if (! con) echo "Connection Failed"; mysqli_select_db( con, 'test') or die(mysqli_error( con)); q "SELECT FROM tb1"; mysqli_query( con, q) or die(mysqli_error( con)); result mysqli_query( con, q); num mysqli_num_rows( result); for ( i 1; i lt; num; i ) row mysqli_fetch_array( result); if(? gt; lt;script gt;x lt; script gt; lt;?php row 'coursename' ) ? gt; lt;div id "downloads" gt; lt;span id "pdfname" gt; lt;?php echo row 'pdfname' ? gt; lt; span gt; lt;a href "upload lt;?php echo row 'file' ? gt;" gt; lt;img src "download.png" id "downloadbtn" gt; lt; a gt; lt; div gt; lt;?php mysqli_close( con); ? gt; Here I want to compare var x of js to row 'coursename' ie mysql db table entry. Basically this code is targetting to display db table entry according to onclick event. Example: When I click on Electromagnetic Theory, File displayed on pag

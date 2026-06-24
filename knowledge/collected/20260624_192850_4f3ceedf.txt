@@ -1,0 +1,7 @@
+TITLE: Making my own &quot;draggable&quot; function
+SOURCE: StackExchange
+URL: https://stackoverflow.com/questions/8241198/making-my-own-draggable-function
+DATE: 2026-06-24T19:28:50.850733
+============================================================
+
+Making my own quot;draggable quot; function. It seems that my attempt at trying to replicate Jquery UI's draggable function has proven the Quantum Mechanics principle of a div existing in two places at once. When I hold my mouse down on the box div and move the mouse cursor, the box div starts flashing like crazy and a "clone" of the box div appears to the southeast of the original box div and it is also flashing. Here's the jsfiddle: jsfiddle

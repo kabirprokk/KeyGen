@@ -1,0 +1,7 @@
+TITLE: Probability basics for machine learning
+SOURCE: StackExchange
+URL: https://stackoverflow.com/questions/13067030/probability-basics-for-machine-learning
+DATE: 2026-06-24T19:14:54.029982
+============================================================
+
+Probability basics for machine learning. I have recently started studying Machine Learning and found that I need to refresh probability basics such as Conditional Probability, Bayes Theorem etc. I am looking for online resources where I can quickly brush up probability concepts wrt Machine Learning. The online resorces, I stumbled upon are either very basic or too advanced.

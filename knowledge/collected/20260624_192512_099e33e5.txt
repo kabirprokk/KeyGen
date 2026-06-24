@@ -1,0 +1,7 @@
+TITLE: What is Blueprints from Unreal Engine from fundamentals of computer science?
+SOURCE: StackExchange
+URL: https://stackoverflow.com/questions/39928884/what-is-blueprints-from-unreal-engine-from-fundamentals-of-computer-science
+DATE: 2026-06-24T19:25:12.493917
+============================================================
+
+What is Blueprints from Unreal Engine from fundamentals of computer science?. I am trying to create something similar to Blueprints from Unreal but for Web development. I googled some questions about what Blueprint actually is but I didn't get any success, most of the links point to unrelated information. I am trying to understand from fundamentals of computer science where Blueprint concept come from. The only related information I got was this one but I am not sure if Blueprints are actually this concept.

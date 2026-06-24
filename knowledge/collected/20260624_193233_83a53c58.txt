@@ -1,0 +1,7 @@
+TITLE: basic concept for Linear Algebra
+SOURCE: StackExchange
+URL: https://stackoverflow.com/questions/44443121/basic-concept-for-linear-algebra
+DATE: 2026-06-24T19:32:33.554150
+============================================================
+
+basic concept for Linear Algebra. Question is: Let A and B be 3x3 (square) matrices. Which of following must necessarily hold true? One of the option is A B B A, but I didn't choose. The answer display this equation is true. I don't understand. In the identity matrix, A I(n n) I A Can this multiply principal also be used in addition? Could you give a specific and simple example? Thanks a lot.

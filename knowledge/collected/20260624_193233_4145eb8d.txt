@@ -1,0 +1,7 @@
+TITLE: Linear Algebra usage in programming
+SOURCE: StackExchange
+URL: https://stackoverflow.com/questions/6401651/linear-algebra-usage-in-programming
+DATE: 2026-06-24T19:32:33.553838
+============================================================
+
+Linear Algebra usage in programming. I am starting to learn Linear Algebra but it is has been very mathematical and I don't know its actual usage in programming. I heard it is a very useful subject for movements(animate) and graphics. I thought I could make my learning process for linear algebra more fun if I could learn it from its application through programming. That's learn through the practical way and not just working out on paper. Since I am still learning the very basics of linear algebra, I am thinking where and how are basic concepts of linear algebra used in programming? What kind of interesting things could be done with basic knowledge of linear algebra such as row-echelon form, LU deposition, linear combination system, etc. Any tutorials on any languages such as Java, Actionscript, PHP or others teaching the usage of basic linear algebra concepts to create interesting simple things? Thanks!

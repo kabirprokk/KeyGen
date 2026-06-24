@@ -1,0 +1,7 @@
+TITLE: Is OOP based on any branch of mathematics?
+SOURCE: StackExchange
+URL: https://stackoverflow.com/questions/2979858/is-oop-based-on-any-branch-of-mathematics
+DATE: 2026-06-24T19:32:21.144903
+============================================================
+
+Is OOP based on any branch of mathematics?. I know relational databases are based on set-theory, functional programming is based on lambda calculus, logic programming is based on logic (of course :)), and now that I think of it; I'm not sure if imperative and generic programming is based on any particular branch of mathematics either.

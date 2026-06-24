@@ -1,0 +1,7 @@
+TITLE: Prerequisites for understanding Wavelet theory
+SOURCE: StackExchange
+URL: https://stackoverflow.com/questions/1452444/prerequisites-for-understanding-wavelet-theory
+DATE: 2026-06-24T19:35:50.769865
+============================================================
+
+Prerequisites for understanding Wavelet theory. I have a degree in computer science and I have taken the following math courses. Calculus I Calculus II Discrete Mathematics and Number Theory Linear Algebra Probability Logic Automata Theory What other courses should I take in order to prepare for studying wavelets, with a focus of implementing wavelet transforms? EDIT: Looks like this was closed for not being "programming related". That is wrong! Wavelet transform is a very common image processing technique, it's used in H.264 and JPEG2000. Is image processing beyond the scope of StackOverflow?

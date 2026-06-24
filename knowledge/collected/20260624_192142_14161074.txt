@@ -1,0 +1,7 @@
+TITLE: Why is Scrapy returning duplicate results?
+SOURCE: StackExchange
+URL: https://stackoverflow.com/questions/26940903/why-is-scrapy-returning-duplicate-results
+DATE: 2026-06-24T19:21:42.363254
+============================================================
+
+Why is Scrapy returning duplicate results?. I am experimenting with scrapy and running into some issues. The problem is that my script is returning duplicate results. I am trying to scrape urls from a parent page and follow each individual url to obtain an associated date. After scraping each nested url, it seems that it will again output the list of urls from the parent page. Here is the script: import scrapy from aeon.items import AeonItem from scrapy.http.request import Request class AeonSpider(scrapy.Spider): name "aeon" allowed_domains "aeon.co" start_urls " def parse(self, response): items for sel in response.xpath(' id "latestPosts" '): item AeonItem() item 'primary_url' sel.xpath('div div div a href').extract() for each in item 'primary_url' : yield Request(each, callback self.parse_next_page,meta 'item':item ) def parse_next_page(self, response): for sel in response.xpath(' id "top" '): item response.meta 'item' item 'comments' sel.xpath('div 5 div 3 div 2 div p em span class "instapaper_datepublished" text()').extract() return item Here is the json output: "comments": "13 February 2014" , "primary_url":

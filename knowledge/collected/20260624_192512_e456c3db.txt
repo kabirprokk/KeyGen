@@ -1,0 +1,7 @@
+TITLE: Why are all the fundamental data structures in computer science recursive in nature?
+SOURCE: StackExchange
+URL: https://stackoverflow.com/questions/18478318/why-are-all-the-fundamental-data-structures-in-computer-science-recursive-in-nat
+DATE: 2026-06-24T19:25:12.493917
+============================================================
+
+Why are all the fundamental data structures in computer science recursive in nature?. I noticed that every fundamental data structure in Computer Science seems recursive in nature. e.g. Graphs, Lists, Arrays, Sets, etc. Why is that? Is there some fundamental reason? Is it because it's easier to prove the properties of recursive data structures via induction?

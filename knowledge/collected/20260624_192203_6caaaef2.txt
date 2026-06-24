@@ -1,0 +1,7 @@
+TITLE: Which language is ideal for robotics
+SOURCE: StackExchange
+URL: https://stackoverflow.com/questions/15028794/which-language-is-ideal-for-robotics
+DATE: 2026-06-24T19:22:03.849299
+============================================================
+
+Which language is ideal for robotics. I am a Robotics engineer and I have just finished my MSc. I see that a lot of companies that are developing robotics solutions and automations are demanding more and more that the engineers that they are asking to hire, to be able to program. But besides Matlab which is the obvious what would be a good programming language to learn? And by "good", I mean a language that is heavily used in industrial programming. (Industrial robots, cars and avionics, welding and painting robots and mostly automations) Thanks in advance.

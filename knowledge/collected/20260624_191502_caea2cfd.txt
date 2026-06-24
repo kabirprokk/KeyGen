@@ -1,0 +1,7 @@
+TITLE: In quantum computing is there a preference to usage of little endian or big endian?
+SOURCE: StackExchange
+URL: https://stackoverflow.com/questions/62161231/in-quantum-computing-is-there-a-preference-to-usage-of-little-endian-or-big-endi
+DATE: 2026-06-24T19:15:02.599008
+============================================================
+
+In quantum computing is there a preference to usage of little endian or big endian?. I've been learning quantum computing related concepts over the past few months. We've generally used the big endian notation while solving problems on paper. Recently on starting to code I find that at a lot of places the little endian notation is used. I see the same in Quantum Katas by Microsoft and also in Qiskit. On paper, however, thinking in terms of Little endian reverses the order of tensor products, etc. So sometimes it gets confusing. Is there any particular trend on using little endian in quantum computing softwares (QDK, Qiskit, etc) or any reason for the same? Any suggestions in terms of what is the best way to think (in the above context), that can help while developing quantum algos to problems and smoothly translating them into code are welcome.

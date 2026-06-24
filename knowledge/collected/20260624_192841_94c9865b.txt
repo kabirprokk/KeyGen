@@ -1,0 +1,7 @@
+TITLE: How can I get more intuitive feels about django relationships(like:Many-to-one,Many-to-many )
+SOURCE: StackExchange
+URL: https://stackoverflow.com/questions/1962323/how-can-i-get-more-intuitive-feels-about-django-relationshipslikemany-to-one-m
+DATE: 2026-06-24T19:28:41.841875
+============================================================
+
+How can I get more intuitive feels about django relationships(like:Many-to-one,Many-to-many ). i use xampp(it has mysql) I was Confused on this django relationships, who can give me a code example(or text) to let me feel it intuitive .thanks (like:Einstein described the theory of relativity)

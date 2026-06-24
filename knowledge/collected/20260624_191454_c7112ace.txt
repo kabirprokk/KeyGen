@@ -1,0 +1,7 @@
+TITLE: Recommendations for using graphs theory in machine learning?
+SOURCE: StackExchange
+URL: https://stackoverflow.com/questions/8476805/recommendations-for-using-graphs-theory-in-machine-learning
+DATE: 2026-06-24T19:14:54.029982
+============================================================
+
+Recommendations for using graphs theory in machine learning?. I have been learning alot about using graphs for machine learning by watching Christopher Bishops videos( ). I find it very interesting and watched a few others in the same categories(machine learning graph) but was wondering if anyone had any recommendations for ways of learning more? My problem is, although the videos gave a great high level understanding, I don't have much practical skills in it yet. I've read Bishops book on machine learning patterns as well as Norvig's AI book but both don't seem to touch upon specific using graphs much. With the emergence of search engines and social networking, I would think machine learning on graphs would be popular. If possible, can anyone suggestion an a resource to learn from? (I'm new to this field and development is a hobby for me, so I'm sorry in advance if there's a super obvious resource to learn from..I tried google and university sites). Thanks in advance!

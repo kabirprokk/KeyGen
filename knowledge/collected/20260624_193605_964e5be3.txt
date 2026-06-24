@@ -1,0 +1,7 @@
+TITLE: Periodic table, elements going below one another
+SOURCE: StackExchange
+URL: https://stackoverflow.com/questions/59436630/periodic-table-elements-going-below-one-another
+DATE: 2026-06-24T19:36:05.043520
+============================================================
+
+Periodic table, elements going below one another. I have a project on html css to make the periodic table. I am done with it, but now I want when I resize the screen to mobile version, every element to go below one another. I am giving you two elements to know the html part: html lt;div class "periodic-row" gt; lt;div class "cell" gt; lt;div class "element" gt; lt;div class "at_num" gt;3 lt; div gt; lt;div class "symbol" gt;Li lt; div gt; lt;div class "at_details" gt;Lithium lt; div gt; lt; div gt; lt; div gt; lt;div class "cell" gt; lt;div class "element" gt; lt;div class "at_num" gt;4 lt; div gt; lt;div class "symbol" gt;Be lt; div gt; lt;div class "at_details" gt;Beryllium lt; div gt; lt; div gt; lt; div gt; Here is the CSS Part: .periodic-row clear: both; height: 10 ; .cell float: left; position: relative; width: 5.55 ; height: 100 ; .element position: absolute; top: 0; left: 0; border: 1px solid rgb(0, 0, 0); text-align: center; background-color: rgb(45, 224, 209); .at_num, .at_details position: absolute; color: rgb(255, 255, 255); .at_num top: 4px; right: 5px; .symbol position: absolute; top: 50 ; left: 0px; right: 0px; .at_details bottom: 4px; left: 0px; right: 0px; .periodic-row:nth-child(-n 7) .cell:nth-child(n 1
